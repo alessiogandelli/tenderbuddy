@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>From Tender to First Price — Progress</title>
+<style>
+  :root {
+    --bg: #080d18;
+    --side: #0c1424;
+    --panel: #111a2b;
+    --panel2: #0e1727;
+    --line: #1f2c44;
+    --line2: #2b3b58;
+    --text: #e8eef7;
+    --muted: #8b9bb4;
+    --accent: #2dd4bf;
+    --accent2: #3b82f6;
+    --p1: #2dd4bf;
+    --p2: #3b82f6;
+    --p3: #a78bfa;
+    --done: #22c55e;
+    --progress: #f59e0b;
+    --blocked: #ef4444;
+    --todo: #64748b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+
+  .layout { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  /* sidebar */
+  aside {
+    background: var(--side); border-right: 1px solid var(--line);
+    padding: 22px 16px; display: flex; flex-direction: column; gap: 22px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  @media (max-width: 860px) { aside { position: static; height: auto; } }
+  .logo .kicker { color: var(--accent); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; }
+  .logo h1 { margin: 4px 0 0; font-size: 16px; line-height: 1.25; }
+  .logo .sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  nav { display: flex; flex-direction: column; gap: 4px; }
+  nav a {
+    display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--muted);
+    padding: 9px 11px; border-radius: 10px; font-size: 13px; font-weight: 500; border: 1px solid transparent;
+  }
+  nav a:hover { color: var(--text); background: rgba(255,255,255,.03); }
+  nav a.active { color: var(--text); background: var(--panel); border-color: var(--line); }
+  nav a .ico { width: 16px; text-align: center; opacity: .9; }
+  .side-prog { margin-top: auto; border-top: 1px solid var(--line); padding-top: 16px; }
+  .side-prog .lbl { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
+  .side-prog .lbl b { color: var(--text); }
+  .minibar { height: 6px; border-radius: 999px; background: #0a1220; overflow: hidden; margin-top: 7px; }
+  .minibar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 999px; }
+
+  main { padding: 26px 30px 80px; max-width: 1180px; }
+  @media (max-width: 860px) { main { padding: 20px 16px 60px; } }
+
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .topbar h2 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  .topbar .desc { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .topbar .stamp { color: var(--muted); font-size: 12px; text-align: right; }
+  .topbar .stamp b { color: var(--text); }
+
+  .view { display: none; }
+  .view.active { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .grid { display: grid; gap: 14px; }
+
+  /* status pills */
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-done { background: rgba(34,197,94,.12); color: #7fe0a1; border-color: rgba(34,197,94,.35); }
+  .status-in_progress { background: rgba(245,158,11,.12); color: #f7c165; border-color: rgba(245,158,11,.35); }
+  .status-blocked { background: rgba(239,68,68,.12); color: #f79b9b; border-color: rgba(239,68,68,.35); }
+  .status-todo { background: rgba(100,116,139,.14); color: #a7b4c9; border-color: rgba(100,116,139,.4); }
+  .status-done .dot { background: var(--done); }
+  .status-in_progress .dot { background: var(--progress); }
+  .status-blocked .dot { background: var(--blocked); }
+  .status-todo .dot { background: var(--todo); }
+
+  .owner { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line2); color: var(--text); }
+  .owner .d { width: 8px; height: 8px; border-radius: 50%; }
+  .o-P1 .d { background: var(--p1); } .o-P2 .d { background: var(--p2); } .o-P3 .d { background: var(--p3); }
+
+  /* overview */
+  .hero { display: grid; grid-template-columns: auto 1fr; gap: 26px; padding: 24px; align-items: center; }
+  @media (max-width: 700px) { .hero { grid-template-columns: 1fr; } }
+  .ring { position: relative; width: 130px; height: 130px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .val { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring .val b { font-size: 27px; }
+  .ring .val span { font-size: 11px; color: var(--muted); }
+  .hero .hstats { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 11px; padding: 11px 14px; min-width: 118px; }
+  .stat .n { font-size: 20px; font-weight: 700; }
+  .stat .t { font-size: 11px; color: var(--muted); }
+  .hero .cur { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .hero .cur b { color: var(--text); }
+
+  .sec-title { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+    margin: 26px 0 12px; font-weight: 700; }
+
+  .nextup { display: grid; gap: 10px; }
+  .nu { display: flex; align-items: center; gap: 12px; padding: 13px 15px; }
+  .nu .n { font-size: 12px; color: var(--accent); font-weight: 700; min-width: 34px; }
+  .nu .tt { flex: 1; font-size: 13px; }
+  .nu .tt small { display: block; color: var(--muted); font-size: 11.5px; }
+
+  .tierrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 800px) { .tierrow { grid-template-columns: 1fr; } }
+  .tier { padding: 16px; }
+  .tier h4 { margin: 0 0 4px; font-size: 13.5px; }
+  .tier .pct { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+  .tier ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .tier li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #c9d4e5; }
+  .tick { flex: none; width: 15px; height: 15px; border-radius: 5px; border: 1.5px solid var(--todo);
+    display: flex; align-items: center; justify-content: center; font-size: 10px; color: #05121f; }
+  .tick.done { background: var(--done); border-color: var(--done); }
+
+  /* milestones */
+  .phase { margin-bottom: 22px; }
+  .phase-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .phase-head h3 { margin: 0; font-size: 14px; }
+  .phase-head .r { color: var(--muted); font-size: 11.5px; }
+  .phase-head .bar { flex: 1; height: 1px; background: var(--line); }
+  .mslist { display: grid; gap: 10px; }
+  .ms { padding: 15px 17px; }
+  .ms-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ms-top .mnum { font-size: 12px; font-weight: 800; color: var(--accent); min-width: 40px; }
+  .ms-top .hrs { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 7px; padding: 2px 8px; }
+  .ms-top h4 { margin: 0; font-size: 14px; flex: 1; min-width: 220px; }
+  .ms-top .spacer { flex: 1; }
+  .tasks { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 7px; }
+  .tasks li { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #c9d4e5; }
+  .tasks li .tk { flex: none; width: 15px; height: 15px; border-radius: 5px; border: 1.5px solid var(--todo);
+    display: flex; align-items: center; justify-content: center; font-size: 10px; color: #05121f; }
+  .tasks li .tk.done { background: var(--done); border-color: var(--done); }
+  .tasks li .who { margin-left: auto; font-size: 10.5px; font-weight: 700; }
+  .who.P1 { color: var(--p1); } .who.P2 { color: var(--p2); } .who.P3 { color: var(--p3); }
+
+  /* pipeline */
+  .acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 980px) { .acts { grid-template-columns: 1fr; } }
+  .act { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .act .an { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: .1em; }
+  .act h3 { margin: 2px 0 0; font-size: 14px; }
+  .act .goal { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .act .pctline { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 7px; }
+  .step .st { display: flex; align-items: center; gap: 10px; }
+  .step .sn { flex: none; width: 22px; height: 22px; border-radius: 7px; background: #1d2b45; color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .step h4 { margin: 0; font-size: 13px; }
+  .step p { margin: 0; color: var(--muted); font-size: 12px; }
+  .step .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+  /* team */
+  .teamgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 980px) { .teamgrid { grid-template-columns: 1fr; } }
+  .tm { padding: 20px; display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--line2); }
+  .tm.P1 { border-top-color: var(--p1); } .tm.P2 { border-top-color: var(--p2); } .tm.P3 { border-top-color: var(--p3); }
+  .tm .badge { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px; color: #05121f; }
+  .tm.P1 .badge { background: var(--p1); } .tm.P2 .badge { background: var(--p2); } .tm.P3 .badge { background: var(--p3); }
+  .tm h3 { margin: 2px 0 0; font-size: 15px; }
+  .tm .role { color: var(--text); font-size: 12.5px; font-weight: 600; }
+  .tm .tag { color: var(--muted); font-size: 12px; font-style: italic; }
+  .tm .focus { font-size: 12.5px; color: #c9d4e5; }
+  .tm .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; margin-top: 4px; }
+  .tm .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tm .chip { font-size: 11px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; color: #c9d4e5; }
+  .seam { padding: 16px 18px; margin-top: 16px; font-size: 12.5px; color: var(--muted); }
+  .seam b { color: var(--text); }
+
+  /* architecture */
+  .arch-note { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: #f7c165;
+    background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.35); padding: 6px 12px; border-radius: 999px; margin-bottom: 18px; }
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; }
+  .flow .node { background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 9px 14px; font-size: 12.5px; font-weight: 600; }
+  .flow .arrow { color: var(--muted); }
+  .flow .node.start { border-color: var(--accent); color: var(--accent); }
+  .flow .node.end { border-color: var(--accent2); color: #9ec1ff; }
+  .layers { display: grid; gap: 14px; }
+  .layer { padding: 16px 18px; display: grid; grid-template-columns: 190px 1fr; gap: 16px; align-items: center; }
+  @media (max-width: 700px) { .layer { grid-template-columns: 1fr; } }
+  .layer .lt { font-size: 12.5px; font-weight: 700; }
+  .layer .lk { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .layer .nodes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .layer .n { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; font-size: 12px; }
+  .layer.client { border-left: 3px solid var(--p1); }
+  .layer.contract { border-left: 3px solid var(--accent); }
+  .layer.engine { border-left: 3px solid var(--p3); }
+  .layer.data { border-left: 3px solid var(--p2); }
+
+  footer { color: var(--muted); font-size: 12px; margin-top: 36px; border-top: 1px solid var(--line); padding-top: 16px; }
+  code { background: var(--panel2); padding: 2px 6px; border-radius: 6px; color: var(--text); }
+  .err { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #f7b1b1; padding: 16px 18px; border-radius: 12px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="logo">
+      <div class="kicker">Sprintd · Equans</div>
+      <h1>From Tender to First Price</h1>
+      <div class="sub" id="sample"></div>
+    </div>
+    <nav id="nav">
+      <a href="#overview" data-view="overview"><span class="ico">◧</span> Overview</a>
+      <a href="#milestones" data-view="milestones"><span class="ico">▤</span> Milestones</a>
+      <a href="#pipeline" data-view="pipeline"><span class="ico">⇉</span> Pipeline</a>
+      <a href="#team" data-view="team"><span class="ico">◍</span> Team</a>
+      <a href="#architecture" data-view="architecture"><span class="ico">◇</span> Architecture</a>
+    </nav>
+    <div class="side-prog">
+      <div class="lbl"><span>Overall</span><b id="sidePct">0%</b></div>
+      <div class="minibar"><i id="sideBar" style="width:0%"></i></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div>
+        <h2 id="pageTitle">Overview</h2>
+        <div class="desc" id="pageDesc"></div>
+      </div>
+      <div class="stamp">Updated <b id="updated">—</b><br><span id="hours"></span></div>
+    </div>
+    <div id="views"></div>
+    <footer>
+      Edit <code>dashboard/progress.json</code> and refresh. Served from the repo root with
+      <code>python3 -m http.server 8000</code>.
+    </footer>
+  </main>
+</div>
+
+<script>
+const PAGES = {
+  overview: ["Overview", "Where we are, what's next."],
+  milestones: ["Milestones", "36 hours split into 12 × 3h blocks."],
+  pipeline: ["Pipeline", "The 9 engine steps across 3 acts."],
+  team: ["Team", "Three people, three workstreams."],
+  architecture: ["Architecture", "Draft system shape — subject to change."]
+};
+
+function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function statusPill(s, labels) { return `<span class="pill status-${s}"><span class="dot"></span>${esc(labels[s] || s)}</span>`; }
+function ownerPill(id) { return `<span class="owner o-${id}"><span class="d"></span>${esc(id)}</span>`; }
+function pct(done, total) { return total ? Math.round((done / total) * 100) : 0; }
+function sumStatus(items) {
+  const c = { done: 0, in_progress: 0, blocked: 0, todo: 0 };
+  items.forEach(i => { c[i.status] = (c[i.status] || 0) + 1; });
+  return c;
+}
+
+let DATA = null;
+
+function allMilestoneTasks() { return DATA.milestones.flatMap(m => m.tasks); }
+function milestonePct() { const t = DATA.milestones; return pct(t.filter(m => m.status === "done").length, t.length); }
+
+function renderNav(active) {
+  document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("active", a.dataset.view === active));
+  document.getElementById("pageTitle").textContent = PAGES[active][0];
+  document.getElementById("pageDesc").textContent = PAGES[active][1];
+}
+
+function viewOverview() {
+  const labels = DATA.statusLegend.labels;
+  const ms = DATA.milestones;
+  const c = sumStatus(ms);
+  const percent = milestonePct();
+  const C = 2 * Math.PI * 54;
+  const cur = ms.find(m => m.status === "in_progress") || ms.find(m => m.status === "todo") || ms[ms.length - 1];
+  const next = ms.filter(m => m.status === "todo").slice(0, 3);
+
+  const v = el(`<div class="view active">
+    <div class="card hero">
+      <div class="ring">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="54" fill="none" stroke="#1d2b45" stroke-width="11"/>
+          <circle cx="65" cy="65" r="54" fill="none" stroke="url(#g)" stroke-width="11" stroke-linecap="round"
+            stroke-dasharray="${(percent/100*C).toFixed(1)} ${C.toFixed(1)}"/>
+          <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#2dd4bf"/><stop offset="100%" stop-color="#3b82f6"/>
+          </linearGradient></defs>
+        </svg>
+        <div class="val"><b>${percent}%</b><span>milestones</span></div>
+      </div>
+      <div>
+        <div class="hstats">
+          <div class="stat"><div class="n">${ms.length}</div><div class="t">milestones</div></div>
+          <div class="stat"><div class="n" style="color:var(--done)">${c.done}</div><div class="t">done</div></div>
+          <div class="stat"><div class="n" style="color:var(--progress)">${c.in_progress}</div><div class="t">in progress</div></div>
+          <div class="stat"><div class="n" style="color:var(--blocked)">${c.blocked}</div><div class="t">blocked</div></div>
+          <div class="stat"><div class="n" style="color:var(--todo)">${c.todo}</div><div class="t">to do</div></div>
+        </div>
+        <div class="cur">Current: <b>${esc(cur.id)} · ${esc(cur.title)}</b> &nbsp;·&nbsp; ${cur.start_h}–${cur.end_h}h &nbsp;·&nbsp; ${cur.owner.map(ownerPill).join(" ")}</div>
+      </div>
+    </div>
+
+    <div class="sec-title">Next up</div>
+    <div class="nextup">
+      ${next.map(m => `<div class="card nu">
+        <div class="n">${esc(m.id)}</div>
+        <div class="tt">${esc(m.title)}<small>h ${m.start_h}–${m.end_h} · ${m.owner.join(", ")}</small></div>
+        ${statusPill(m.status, labels)}
+      </div>`).join("") || `<div class="card nu"><div class="tt">All milestones started — push to the finish.</div></div>`}
+    </div>
+
+    <div class="sec-title">Success tiers</div>
+    <div class="tierrow" id="tierrow"></div>
+
+    <div class="sec-title">Risks</div>
+    <div class="grid" style="grid-template-columns:repeat(2,1fr)" id="riskgrid"></div>
+  </div>`);
+
+  const tr = v.querySelector("#tierrow");
+  DATA.tiers.forEach(t => {
+    const d = t.items.filter(i => i.status === "done").length;
+    const p = pct(d, t.items.length);
+    const c2 = el(`<div class="card tier">
+      <h4>${esc(t.title)}</h4>
+      <div class="pct">${d}/${t.items.length} · ${p}%</div>
+      <div class="minibar"><i style="width:${p}%"></i></div>
+      <ul>${t.items.map(i => `<li><span class="tick ${i.status}">${i.status === "done" ? "✓" : ""}</span>${esc(i.title)}</li>`).join("")}</ul>
+    </div>`);
+    tr.appendChild(c2);
+  });
+
+  const rg = v.querySelector("#riskgrid");
+  DATA.risks.items.forEach(r => {
+    rg.appendChild(el(`<div class="card" style="padding:13px 15px;display:flex;gap:12px;align-items:flex-start">
+      <span class="impact" style="flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;background:${
+        r.impact==='high'?'rgba(239,68,68,.14)':r.impact==='medium'?'rgba(245,158,11,.14)':'rgba(100,116,139,.16)'};color:${
+        r.impact==='high'?'#f79b9b':r.impact==='medium'?'#f7c165':'#a7b4c9'}">${esc(r.impact)}</span>
+      <div><div style="font-size:13px">${esc(r.title)}</div><div style="color:var(--muted);font-size:11.5px">${esc(r.note)}</div></div>
+    </div>`));
+  });
+
+  return v;
+}
+
+function viewMilestones() {
+  const labels = DATA.statusLegend.labels;
+  const v = el(`<div class="view active"></div>`);
+  DATA.phases.forEach(ph => {
+    const ms = DATA.milestones.filter(m => m.phase === ph.id);
+    if (!ms.length) return;
+    const done = ms.filter(m => m.status === "done").length;
+    const block = el(`<div class="phase">
+      <div class="phase-head">
+        <h3>${esc(ph.title)}</h3><span class="r">${esc(ph.range)}</span>
+        <span class="bar"></span><span class="r">${done}/${ms.length}</span>
+      </div>
+      <div class="mslist"></div>
+    </div>`);
+    const list = block.querySelector(".mslist");
+    ms.forEach(m => {
+      const card = el(`<div class="card ms">
+        <div class="ms-top">
+          <span class="mnum">${esc(m.id)}</span>
+          <span class="hrs">h ${m.start_h}–${m.end_h}</span>
+          <h4>${esc(m.title)}</h4>
+          <span class="spacer"></span>
+          ${m.owner.map(ownerPill).join(" ")}
+          ${statusPill(m.status, labels)}
+        </div>
+        <ul class="tasks">
+          ${m.tasks.map(t => `<li><span class="tk ${t.status}">${t.status === "done" ? "✓" : ""}</span>${esc(t.title)}<span class="who ${t.owner}">${esc(t.owner)}</span></li>`).join("")}
+        </ul>
+      </div>`);
+      list.appendChild(card);
+    });
+    v.appendChild(block);
+  });
+  return v;
+}
+
+function viewPipeline() {
+  const labels = DATA.statusLegend.labels;
+  const v = el(`<div class="view active"><div class="acts"></div></div>`);
+  const acts = v.querySelector(".acts");
+  DATA.pipeline.acts.forEach(act => {
+    const done = act.steps.filter(s => s.status === "done").length;
+    const p = pct(done, act.steps.length);
+    const a = el(`<div class="card act">
+      <div>
+        <div class="an">ACT ${esc(act.num)}</div>
+        <h3>${esc(act.title)}</h3>
+        <p class="goal">${esc(act.goal)}</p>
+      </div>
+      <div class="pctline"><span>${done}/${act.steps.length}</span><span>${p}%</span></div>
+      <div class="minibar"><i style="width:${p}%"></i></div>
+      <div class="steps" style="display:grid;gap:10px"></div>
+    </div>`);
+    const wrap = a.querySelector(".steps");
+    act.steps.forEach(s => {
+      wrap.appendChild(el(`<div class="step">
+        <div class="st"><span class="sn">${s.num}</span><h4>${esc(s.title)}</h4></div>
+        <p>${esc(s.desc)}</p>
+        <div class="row">${statusPill(s.status, labels)}${ownerPill(s.owner)}</div>
+      </div>`));
+    });
+    acts.appendChild(a);
+  });
+  return v;
+}
+
+function viewTeam() {
+  const v = el(`<div class="view active"><div class="teamgrid" id="tg"></div><div class="card seam" id="seam"></div></div>`);
+  const tg = v.querySelector("#tg");
+  DATA.team.forEach(t => {
+    const ms = t.milestones.join(" · ");
+    tg.appendChild(el(`<div class="card tm ${t.id}">
+      <div class="badge">${esc(t.id)}</div>
+      <h3>${esc(t.name)}</h3>
+      <div class="role">${esc(t.role)}</div>
+      <div class="tag">${esc(t.tagline)}</div>
+      <div class="focus">${esc(t.focus)}</div>
+      <div class="lbl">Owns pipeline steps</div>
+      <div class="chips">${t.owns.map(o => `<span class="chip">${esc(o)}</span>`).join("")}</div>
+      <div class="lbl">Key milestones</div>
+      <div class="chips">${t.milestones.map(m => `<span class="chip">${esc(m)}</span>`).join("")}</div>
+    </div>`));
+  });
+  v.querySelector("#seam").innerHTML =
+    `<b>The seam is the contract.</b> P2 emits structured + matched items → P3 consumes and emits priced results → P1 renders P3's output only. ` +
+    `Freeze the JSON schema in M00 so all three can work in parallel. Golden tracer bullet: <b>LV0001</b> must match <code>expected_output_example.json</code> exactly.`;
+  return v;
+}
+
+function viewArchitecture() {
+  const a = DATA.architecture;
+  const v = el(`<div class="view active">
+    <div class="arch-note">◆ ${esc(a.note)}</div>
+    <div class="flow">
+      ${a.flow.map((f, i) => `<span class="node ${i===0?'start':i===a.flow.length-1?'end':''}">${esc(f)}</span>${i<a.flow.length-1?'<span class="arrow">→</span>':''}`).join("")}
+    </div>
+    <div class="layers" id="layers"></div>
+  </div>`);
+  const layers = v.querySelector("#layers");
+  a.layers.forEach(l => {
+    layers.appendChild(el(`<div class="card layer ${l.kind}">
+      <div><div class="lk">${esc(l.kind)}</div><div class="lt">${esc(l.title)}</div></div>
+      <div class="nodes">${l.nodes.map(n => `<span class="n">${esc(n)}</span>`).join("")}</div>
+    </div>`));
+  });
+  return v;
+}
+
+function renderView(name) {
+  const host = document.getElementById("views");
+  host.innerHTML = "";
+  const fn = { overview: viewOverview, milestones: viewMilestones, pipeline: viewPipeline, team: viewTeam, architecture: viewArchitecture }[name] || viewOverview;
+  host.appendChild(fn());
+  renderNav(name);
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  document.getElementById("sample").textContent = DATA.meta.sample || "";
+  document.getElementById("updated").textContent = DATA.meta.updated || "—";
+  document.getElementById("hours").textContent = (DATA.meta.total_hours || "?") + "h total · 12 × 3h";
+  const p = milestonePct();
+  document.getElementById("sidePct").textContent = p + "%";
+  document.getElementById("sideBar").style.width = p + "%";
+
+  const initial = (location.hash || "#overview").slice(1);
+  renderView(PAGES[initial] ? initial : "overview");
+}
+
+window.addEventListener("hashchange", () => {
+  const name = (location.hash || "#overview").slice(1);
+  renderView(PAGES[name] ? name : "overview");
+});
+
+fetch("progress.json")
+  .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then(d => { DATA = d; render(); })
+  .catch(err => {
+    document.getElementById("views").innerHTML =
+      `<div class="err"><b>Could not load progress.json</b><br>${esc(err.message)}<br><br>
+       Serve the folder: <code>python3 -m http.server 8000</code> → <code>http://localhost:8000/dashboard/</code>.</div>`;
+  });
+</script>
+</body>
+</html>

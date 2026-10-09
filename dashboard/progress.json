@@ -1,0 +1,274 @@
+{
+  "meta": {
+    "title": "From Tender to First Price",
+    "subtitle": "Sprintd Hackathon — Equans Switzerland",
+    "sample": "Schulhaus Oberglatt · BKP 244 Lüftungsanlagen",
+    "updated": "2026-10-09",
+    "total_hours": 36,
+    "deadline": "2026-10-10"
+  },
+  "statusLegend": {
+    "order": ["done", "in_progress", "blocked", "todo"],
+    "labels": {
+      "done": "Done",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "todo": "To do"
+    }
+  },
+  "phases": [
+    { "id": "foundation", "title": "Foundation & alignment", "range": "h 0–6" },
+    { "id": "core", "title": "Core build", "range": "h 6–21" },
+    { "id": "full", "title": "Full LV & commercial", "range": "h 21–30" },
+    { "id": "demo", "title": "Polish & demo", "range": "h 30–36" }
+  ],
+  "milestones": [
+    {
+      "id": "M00", "num": 0, "phase": "foundation", "start_h": 0, "end_h": 3,
+      "title": "Foundation: freeze schemas + golden test",
+      "owner": ["P1", "P2", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M00a", "title": "Freeze shared JSON contract (position_results, summary, bid range)", "owner": "P2", "status": "todo" },
+        { "id": "M00b", "title": "Agree LV0001 golden test reproduces expected_output_example.json", "owner": "P3", "status": "todo" },
+        { "id": "M00c", "title": "Scaffold web app + engine repos/folders", "owner": "P1", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M01", "num": 1, "phase": "foundation", "start_h": 3, "end_h": 6,
+      "title": "Vertical slice: upload → table → price (mock)",
+      "owner": ["P1", "P2", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M01a", "title": "Upload screen + render a positions table from mock JSON", "owner": "P1", "status": "todo" },
+        { "id": "M01b", "title": "First PDF extraction pass on LA01 (one system)", "owner": "P2", "status": "todo" },
+        { "id": "M01c", "title": "Material + labour formulas wired to mock rows", "owner": "P3", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M02", "num": 2, "phase": "core", "start_h": 6, "end_h": 9,
+      "title": "Golden pipeline end-to-end (22 examples)",
+      "owner": ["P2", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M02a", "title": "Reproduce expected_output_example.json numbers exactly", "owner": "P3", "status": "todo" },
+        { "id": "M02b", "title": "Extraction + matching matches the 22 verified positions", "owner": "P2", "status": "todo" },
+        { "id": "M02c", "title": "Golden test runs in CI/script", "owner": "P3", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M03", "num": 3, "phase": "core", "start_h": 9, "end_h": 12,
+      "title": "Full extraction v1: all systems",
+      "owner": ["P2"], "status": "todo",
+      "tasks": [
+        { "id": "M03a", "title": "Positions + quantities + units + source page across 6 systems", "owner": "P2", "status": "todo" },
+        { "id": "M03b", "title": "Handle multi-variant rows and lump-sum totals", "owner": "P2", "status": "todo" },
+        { "id": "M03c", "title": "Flag low-confidence extractions", "owner": "P2", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M04", "num": 4, "phase": "core", "start_h": 12, "end_h": 15,
+      "title": "Matching v1: catalogue + confidence + routing",
+      "owner": ["P2"], "status": "todo",
+      "tasks": [
+        { "id": "M04a", "title": "Attribute match (size, type, fire class) → catalog.csv", "owner": "P2", "status": "todo" },
+        { "id": "M04b", "title": "Confidence score + review_required threshold", "owner": "P2", "status": "todo" },
+        { "id": "M04c", "title": "Route supplier_quote_required items", "owner": "P2", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M05", "num": 5, "phase": "core", "start_h": 15, "end_h": 18,
+      "title": "Pricing engine complete",
+      "owner": ["P3"], "status": "todo",
+      "tasks": [
+        { "id": "M05a", "title": "Material cost + waste allowance", "owner": "P3", "status": "todo" },
+        { "id": "M05b", "title": "Labour hours × factors × rate", "owner": "P3", "status": "todo" },
+        { "id": "M05c", "title": "Project costs + allowances + overhead + margin → selling price", "owner": "P3", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M06", "num": 6, "phase": "full", "start_h": 18, "end_h": 21,
+      "title": "Review UI v1: editable + traceable",
+      "owner": ["P1"], "status": "todo",
+      "tasks": [
+        { "id": "M06a", "title": "Editable positions table (swap product, edit assumptions)", "owner": "P1", "status": "todo" },
+        { "id": "M06b", "title": "Source-page links + status flags + confidence", "owner": "P1", "status": "todo" },
+        { "id": "M06c", "title": "Live recalculation on edit", "owner": "P1", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M07", "num": 7, "phase": "full", "start_h": 21, "end_h": 24,
+      "title": "Full-LV coverage + aggregation",
+      "owner": ["P2", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M07a", "title": "Process most relevant positions across full LV", "owner": "P2", "status": "todo" },
+        { "id": "M07b", "title": "Aggregate costs by system and category", "owner": "P3", "status": "todo" },
+        { "id": "M07c", "title": "Coverage report (calculated / quote / review / out-of-scope)", "owner": "P2", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M08", "num": 8, "phase": "full", "start_h": 24, "end_h": 27,
+      "title": "Cost & margin overview in app",
+      "owner": ["P1", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M08a", "title": "Project build-up view (material, labour, services, allowances)", "owner": "P1", "status": "todo" },
+        { "id": "M08b", "title": "Indicative selling price + margin readout", "owner": "P1", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M09", "num": 9, "phase": "full", "start_h": 27, "end_h": 30,
+      "title": "Bid optimization: 3 scenarios",
+      "owner": ["P3", "P1"], "status": "todo",
+      "tasks": [
+        { "id": "M09a", "title": "Aggressive / Target / Conservative margins", "owner": "P3", "status": "todo" },
+        { "id": "M09b", "title": "Estimated win probability + expected contribution", "owner": "P3", "status": "todo" },
+        { "id": "M09c", "title": "Bid-range cards + scenario compare", "owner": "P1", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M10", "num": 10, "phase": "demo", "start_h": 30, "end_h": 33,
+      "title": "Polish: UX, traceability, export",
+      "owner": ["P1"], "status": "todo",
+      "tasks": [
+        { "id": "M10a", "title": "UX pass on the full journey", "owner": "P1", "status": "todo" },
+        { "id": "M10b", "title": "Export priced offer", "owner": "P1", "status": "todo" },
+        { "id": "M10c", "title": "Empty/error/uncertainty states", "owner": "P1", "status": "todo" }
+      ]
+    },
+    {
+      "id": "M11", "num": 11, "phase": "demo", "start_h": 33, "end_h": 36,
+      "title": "Demo prep: rehearse end-to-end",
+      "owner": ["P1", "P2", "P3"], "status": "todo",
+      "tasks": [
+        { "id": "M11a", "title": "Full run-through with the real PDF", "owner": "P2", "status": "todo" },
+        { "id": "M11b", "title": "Fallbacks for slow/failed steps", "owner": "P3", "status": "todo" },
+        { "id": "M11c", "title": "Pitch narrative + judging-lens check", "owner": "P1", "status": "todo" }
+      ]
+    }
+  ],
+  "pipeline": {
+    "acts": [
+      {
+        "id": "act1", "num": "1/3", "title": "Tender → Matched Items",
+        "goal": "Read the PDF and turn it into structured, matched, priceable items.",
+        "steps": [
+          { "id": "extract", "num": 1, "title": "Extract tender items", "desc": "Descriptions, quantities, units, technical details, source pages from the full LV.", "status": "todo", "owner": "P2" },
+          { "id": "match", "num": 2, "title": "Match products", "desc": "Compare attributes against catalog.csv; assign a match confidence.", "status": "todo", "owner": "P2" },
+          { "id": "route", "num": 3, "title": "Select pricing route", "desc": "Catalogue net cost or supplier quotation; mark status.", "status": "todo", "owner": "P2" }
+        ]
+      },
+      {
+        "id": "act2", "num": "2/3", "title": "Matched Items → Direct Costs",
+        "goal": "Turn matches into traceable material and labour cost per position.",
+        "steps": [
+          { "id": "material", "num": 4, "title": "Calculate material cost", "desc": "Quantity × net unit cost × (1 + material waste %).", "status": "todo", "owner": "P3" },
+          { "id": "labour", "num": 5, "title": "Calculate labour cost", "desc": "Base hours × quantity × project factors × hourly rate.", "status": "todo", "owner": "P3" },
+          { "id": "combine", "num": 6, "title": "Combine item costs", "desc": "Material + labour per item; retain item and source-page references.", "status": "todo", "owner": "P3" }
+        ]
+      },
+      {
+        "id": "act3", "num": "3/3", "title": "Direct Costs → Price Variants",
+        "goal": "Aggregate to a project price and (stretch) a recommended bid range.",
+        "steps": [
+          { "id": "projectcost", "num": 7, "title": "Build project cost", "desc": "Sum item costs; add services and allowances once.", "status": "todo", "owner": "P3" },
+          { "id": "sellingprice", "num": 8, "title": "Calculate selling price", "desc": "(Direct costs + overhead) / (1 − target margin).", "status": "todo", "owner": "P3" },
+          { "id": "variants", "num": 9, "title": "Generate variants", "desc": "Aggressive / Target / Conservative with margin + win probability.", "status": "todo", "owner": "P3" }
+        ]
+      }
+    ]
+  },
+  "team": [
+    {
+      "id": "P1",
+      "name": "Person 1",
+      "role": "Product, Web & UX",
+      "tagline": "The face the judges see.",
+      "focus": "App shell, upload, review table, cost/margin, bid-range cards, demo narrative.",
+      "owns": ["upload", "review_adjust", "calculate"],
+      "milestones": ["M00", "M01", "M06", "M08", "M09", "M10", "M11"]
+    },
+    {
+      "id": "P2",
+      "name": "Person 2",
+      "role": "AI Engine — Document → Items",
+      "tagline": "Messy PDF in, clean items out.",
+      "focus": "Extraction, multi-variant handling, catalogue matching, confidence + status routing.",
+      "owns": ["extract", "match", "route"],
+      "milestones": ["M00", "M01", "M02", "M03", "M04", "M07", "M11"]
+    },
+    {
+      "id": "P3",
+      "name": "Person 3",
+      "role": "AI Engine — Items → Price",
+      "tagline": "Items in, defensible price out.",
+      "focus": "Material, labour, project build-up, selling price, bid scenarios, golden tests.",
+      "owns": ["material", "labour", "combine", "projectcost", "sellingprice", "variants"],
+      "milestones": ["M00", "M01", "M02", "M05", "M07", "M08", "M09", "M11"]
+    }
+  ],
+  "architecture": {
+    "note": "DRAFT — subject to change. The frozen seam is the JSON contract in the middle.",
+    "flow": ["Tender PDF", "Extract", "Match", "Price", "Review", "Bid range"],
+    "layers": [
+      {
+        "id": "client", "title": "Web App · P1", "kind": "client",
+        "nodes": ["Upload", "Positions review table", "Cost & margin overview", "Bid-range cards"]
+      },
+      {
+        "id": "contract", "title": "Contract · shared", "kind": "contract",
+        "nodes": ["Frozen JSON schema", "position_results", "project summary", "bid range"]
+      },
+      {
+        "id": "engine", "title": "Engine · P2 + P3", "kind": "engine",
+        "nodes": ["Extractor (P2)", "Matcher (P2)", "Pricing engine (P3)", "Bid optimizer (P3)"]
+      },
+      {
+        "id": "data", "title": "Data · provided", "kind": "data",
+        "nodes": ["catalog.csv", "productivity.csv", "project_parameters.json", "expected_output (tests)"]
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "mvp", "title": "Minimum Viable",
+      "items": [
+        { "id": "mvp1", "title": "Process the full LV", "status": "todo" },
+        { "id": "mvp2", "title": "Extract positions and quantities", "status": "todo" },
+        { "id": "mvp3", "title": "Match some products", "status": "todo" },
+        { "id": "mvp4", "title": "Calculate material and labour", "status": "todo" },
+        { "id": "mvp5", "title": "Show source-page references", "status": "todo" },
+        { "id": "mvp6", "title": "Flag uncertainty", "status": "todo" }
+      ]
+    },
+    {
+      "id": "target", "title": "Target",
+      "items": [
+        { "id": "t1", "title": "Process most relevant positions", "status": "todo" },
+        { "id": "t2", "title": "Catalogue + supplier packages", "status": "todo" },
+        { "id": "t3", "title": "Estimate installation hours", "status": "todo" },
+        { "id": "t4", "title": "Aggregate by system/category", "status": "todo" },
+        { "id": "t5", "title": "Human review interface", "status": "todo" },
+        { "id": "t6", "title": "Indicative project price", "status": "todo" }
+      ]
+    },
+    {
+      "id": "stretch", "title": "Stretch",
+      "items": [
+        { "id": "s1", "title": "Bid optimization + pricing range", "status": "todo" },
+        { "id": "s2", "title": "Alternative product suggestions", "status": "todo" },
+        { "id": "s3", "title": "Supplier RFQ generation", "status": "todo" },
+        { "id": "s4", "title": "Design consistency checks", "status": "todo" },
+        { "id": "s5", "title": "Scenario comparison", "status": "todo" },
+        { "id": "s6", "title": "Export priced offer", "status": "todo" }
+      ]
+    }
+  ],
+  "risks": {
+    "title": "Risks & Open Questions",
+    "items": [
+      { "id": "r1", "title": "PDF extraction quality on the full LV", "impact": "high", "note": "Multi-variant rows, lump sums, German tables." },
+      { "id": "r2", "title": "Product-match coverage beyond the 22 verified examples", "impact": "high", "note": "Attribute matching, not string matching." },
+      { "id": "r3", "title": "No real supplier quotes — supplier_package items stay unpriced", "impact": "medium", "note": "Must route to quote, not guess." },
+      { "id": "r4", "title": "Labour factor semantics vs golden output", "impact": "high", "note": "site_efficiency is inverted." },
+      { "id": "r5", "title": "Review UI scope within the time budget", "impact": "medium", "note": "This is what judges score." },
+      { "id": "r6", "title": "Bid-optimization inputs (no historical bids provided)", "impact": "low", "note": "Use parameterized win-probability model." }
+    ]
+  }
+}
