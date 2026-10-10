@@ -19,7 +19,7 @@ import base64
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ... import config
 from ...domain.enums import ItemFlag, ItemStatus, normalize_unit
@@ -365,6 +365,7 @@ async def _run_pages(
     usage: UsageLedger,
     concurrency: int,
     dpi: int,
+    on_page: Optional[Callable[[], None]] = None,
 ) -> List[tuple]:
     semaphore = asyncio.Semaphore(concurrency)
 
@@ -372,9 +373,9 @@ async def _run_pages(
         async with semaphore:
             render = getattr(reader, "render_png", None)
             image = render(pdf_path, page.number, dpi) if render else None
-            if not image:
-                return page, []
-            rows = await _call_page(client, model, effort, image, usage)
+            rows = await _call_page(client, model, effort, image, usage) if image else []
+            if on_page:
+                on_page()
             return page, rows
 
     return list(await asyncio.gather(*(one(page) for page in pages)))
@@ -393,12 +394,14 @@ def extract_document_vision(
     with_geometry: bool = True,
     concurrency: Optional[int] = None,
     dpi: Optional[int] = None,
+    on_page: Optional[Callable[[], None]] = None,
 ) -> VisionExtraction:
     """Extract Items and Detections from the given LV-table pages via images.
 
     ``pages`` defaults to every page of ``document``; the caller passes only the
     pages classified as ``lv_table``. Returns an empty result when the reader
     cannot render images, so the caller can fall back to a text engine.
+    ``on_page`` is called once per page as soon as that page is read.
     """
     usage = usage or UsageLedger()
     if not hasattr(reader, "render_png"):
@@ -422,7 +425,7 @@ def extract_document_vision(
         try:
             return await _run_pages(
                 active, model, effort, selected, reader, pdf_path, usage,
-                concurrency, dpi,
+                concurrency, dpi, on_page,
             )
         finally:
             if owns_client:

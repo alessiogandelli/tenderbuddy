@@ -39,6 +39,8 @@ class ItemPatch(BaseModel):
     product_id: Optional[str] = None
     install_code: Optional[str] = None
     confidence: Optional[float] = None
+    # Explicit null clears it; omitted leaves it unchanged (same for product_id).
+    manual_unit_price_chf: Optional[float] = None
 
 
 class ParametersPatch(BaseModel):
@@ -221,6 +223,13 @@ def patch_item(bando_id: str, lv_id: str, patch: ItemPatch) -> dict:
         item.quantity = patch.quantity
     if patch.unit is not None:
         item.unit = patch.unit
+    if "product_id" in patch.model_fields_set and patch.product_id is None:
+        item.match = None
+    if "manual_unit_price_chf" in patch.model_fields_set:
+        price = patch.manual_unit_price_chf
+        if price is not None and price < 0:
+            raise HTTPException(status_code=400, detail="The price cannot be negative")
+        item.manual_unit_price_chf = price
     if patch.product_id is not None:
         product = get_pricing_db().product(patch.product_id)
         install_code = patch.install_code or (product.install_code if product else None)

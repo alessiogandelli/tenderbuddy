@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from ... import config
 from ...domain.enums import PageType
@@ -139,8 +139,12 @@ def classify_pages(
     usage: Optional[UsageLedger] = None,
     batch_size: Optional[int] = None,
     concurrency: Optional[int] = None,
+    on_progress: Optional[Callable[[int], None]] = None,
 ) -> List[PageClassification]:
-    """Classify every page of the document, in order, via the Decisions API."""
+    """Classify every page of the document, in order, via the Decisions API.
+
+    ``on_progress`` receives the number of pages classified so far after each batch.
+    """
     usage = usage or UsageLedger()
     model = model or config.CLASSIFY_MODEL
     batch_size = batch_size or config.CLASSIFY_BATCH
@@ -166,6 +170,8 @@ def classify_pages(
             async with semaphore:
                 for result in await _call_batch(active, model, batch, usage):
                     results[result.page] = result
+                if on_progress:
+                    on_progress(len(results))
 
         try:
             await asyncio.gather(*(one(batch) for batch in batches))

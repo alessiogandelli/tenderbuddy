@@ -86,9 +86,11 @@ export const api = {
       description_raw?: string;
       quantity?: number;
       unit?: string;
-      product_id?: string;
+      // null clears the catalogue match / the hand-typed price.
+      product_id?: string | null;
       install_code?: string;
       confidence?: number;
+      manual_unit_price_chf?: number | null;
     },
   ) =>
     request<Bando>(`/bandi/${id}/items/${lvId}`, {

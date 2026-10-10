@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { formatChf } from "../lib/format";
+import { formatChf, formatNumber } from "../lib/format";
 
-/** Roll the number to its new value when it changes — the live-price wow. */
-export function AnimatedChf({ value }: { value: number }) {
+/** Roll the number to its new value when it changes. `bare` drops the currency. */
+export function AnimatedChf({ value, bare = false }: { value: number; bare?: boolean }) {
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
 
@@ -16,16 +16,14 @@ export function AnimatedChf({ value }: { value: number }) {
     const tick = (now: number) => {
       const p = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3);
-      setDisplay(from + (to - from) * eased);
-      if (p < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = to;
-      }
+      const current = from + (to - from) * eased;
+      fromRef.current = current;
+      setDisplay(current);
+      if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [value]);
 
-  return <>{formatChf(display)}</>;
+  return <>{bare ? formatNumber(Math.round(display), 0) : formatChf(display)}</>;
 }

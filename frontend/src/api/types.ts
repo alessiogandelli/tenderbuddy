@@ -25,7 +25,7 @@ export type ItemFlag =
   | "out_of_scope"
   | "language_uncertain";
 
-export type PriceSource = "catalog" | "supplier_package";
+export type PriceSource = "catalog" | "supplier_package" | "manual";
 
 export type PipelineStep =
   | "read"
@@ -99,6 +99,7 @@ export interface Item {
   quantity: number | null;
   unit: Unit | null;
   match: Match | null;
+  manual_unit_price_chf?: number | null;
   status: ItemStatus;
   flags: ItemFlag[];
 }
@@ -132,6 +133,9 @@ export interface Summary {
   indicative_selling_price_chf: number;
   project_costs_chf: number;
   include_project_costs: boolean;
+  overhead_chf?: number;
+  transport_equipment_chf?: number;
+  margin_chf?: number;
 }
 
 export interface BidScenario {
@@ -164,6 +168,10 @@ export interface PipelineState {
   error: string | null;
   item_count: number;
   message: string | null;
+  pages_total?: number;
+  pages_read?: number;
+  lv_pages_total?: number;
+  lv_pages_done?: number;
 }
 
 export interface Usage {

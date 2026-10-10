@@ -48,6 +48,9 @@ class Item(BaseModel):
     unit: Optional[Unit] = None
 
     match: Optional[Match] = None
+    # Additive: an all-in direct unit cost typed by the estimator. When set it
+    # prices the Item (as material, no waste, no labour) and wins over the match.
+    manual_unit_price_chf: Optional[float] = None
 
     status: ItemStatus = ItemStatus.REVIEW_REQUIRED
     flags: List[ItemFlag] = Field(default_factory=list)
@@ -87,6 +90,11 @@ class Summary(BaseModel):
     # they are folded into ``direct_cost_chf``. Off by default (golden subset).
     project_costs_chf: float = 0.0
     include_project_costs: bool = False
+    # Additive: the steps from direct cost to price, so the UI can show them
+    # without doing any math (baseline = direct + overhead + transport).
+    overhead_chf: float = 0.0
+    transport_equipment_chf: float = 0.0
+    margin_chf: float = 0.0
 
 
 class Overview(BaseModel):
@@ -162,6 +170,12 @@ class PipelineState(BaseModel):
     # Additive: live progress for the UI's processing screen.
     item_count: int = 0
     message: Optional[str] = None
+    # Additive: page-level progress. ``pages_read`` counts pages read and
+    # classified; ``lv_pages_done`` counts LV-table pages whose rows were extracted.
+    pages_total: int = 0
+    pages_read: int = 0
+    lv_pages_total: int = 0
+    lv_pages_done: int = 0
 
 
 class Profile(BaseModel):

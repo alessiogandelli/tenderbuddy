@@ -1,37 +1,41 @@
-import { Link, Outlet } from "react-router-dom";
-import { LANGUAGES, useI18n, type Locale } from "../i18n";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { FilePlus2 } from "lucide-react";
+import { LANGUAGES, useI18n } from "../i18n";
 
 export function Layout() {
   const { locale, setLocale, t } = useI18n();
+  const onUpload = useLocation().pathname === "/";
 
   return (
     <div className="app">
       <header className="topbar">
         <Link to="/" className="topbar__brand">
-          <span className="topbar__mark" aria-hidden />
-          <span className="topbar__name">
-            Bando<span className="topbar__arrow">→</span>Preventivo
+          <span className="topbar__mark" aria-hidden>
+            TB
           </span>
+          <span className="topbar__name">TenderBuddy</span>
         </Link>
         <div className="topbar__right">
-          <span className="topbar__kicker">Equans · Sprintd Zurich</span>
-          <label className="lang" title={t("language.label")}>
-            <span className="lang__icon" aria-hidden>
-              🌐
-            </span>
-            <select
-              className="lang__select"
-              aria-label={t("language.label")}
-              value={locale}
-              onChange={(event) => setLocale(event.target.value as Locale)}
-            >
-              {LANGUAGES.map((language) => (
-                <option key={language.locale} value={language.locale}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="lang" role="radiogroup" aria-label={t("language.label")}>
+            {LANGUAGES.map((language) => (
+              <button
+                key={language.locale}
+                type="button"
+                role="radio"
+                aria-checked={locale === language.locale}
+                title={language.label}
+                className={`lang__opt ${locale === language.locale ? "is-active" : ""}`}
+                onClick={() => setLocale(language.locale)}
+              >
+                {language.short}
+              </button>
+            ))}
+          </div>
+          {!onUpload && (
+            <Link to="/" className="topbar__new">
+              <FilePlus2 size={16} aria-hidden /> {t("nav.newTender")}
+            </Link>
+          )}
         </div>
       </header>
       <main className="app__main">

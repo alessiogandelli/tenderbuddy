@@ -27,11 +27,11 @@ const BUNDLES: Record<Locale, Messages> = {
 };
 
 // Shipped language switcher entries, each in its own language.
-export const LANGUAGES: { locale: Locale; label: string }[] = [
-  { locale: "en", label: "English" },
-  { locale: "de-CH", label: "Deutsch" },
-  { locale: "fr-CH", label: "Français" },
-  { locale: "it-CH", label: "Italiano" },
+export const LANGUAGES: { locale: Locale; label: string; short: string }[] = [
+  { locale: "en", label: "English", short: "EN" },
+  { locale: "de-CH", label: "Deutsch", short: "DE" },
+  { locale: "fr-CH", label: "Français", short: "FR" },
+  { locale: "it-CH", label: "Italiano", short: "IT" },
 ];
 
 const STORAGE_KEY = "tenderbuddy.locale";

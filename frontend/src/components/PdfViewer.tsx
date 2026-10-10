@@ -1,19 +1,38 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import * as pdfjs from "pdfjs-dist";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { Detection, Item, PageClassification, PageType, PositionResult } from "../api/types";
+import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus, SquareDashed } from "lucide-react";
+import type { Item, PageType, PositionResult } from "../api/types";
+import type { ItemState } from "../lib/flags";
 import { formatChf } from "../lib/format";
-import { PAGE_TYPE_COLORS } from "../lib/flags";
+import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
 import { useI18n } from "../i18n";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-const SCALE = 1.25;
+const PAGE_GAP = 36;
+const SIDE_PAD = 34;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
 
-type Rect = { left: string; top: string; width: string; height: string };
+type Size = { width: number; height: number };
 
-function rectOf(box: number[]): Rect {
+export interface PdfViewerHandle {
+  scrollToPage: (page: number, smooth?: boolean) => void;
+}
+
+function rectOf(box: number[]): CSSProperties {
   return {
     left: `${box[0] * 100}%`,
     top: `${box[1] * 100}%`,
@@ -22,263 +41,205 @@ function rectOf(box: number[]): Rect {
   };
 }
 
-function PdfPage({
-  doc,
-  pageNumber,
-  pageType,
-  highlights,
-  discarded,
-  pricesById,
-  showBoxes,
-  selectedId,
-  onSelect,
-  onVisible,
-  registerRef,
-}: {
+// Variants share one description block: draw its name box once and label the
+// group. Their bottom edge can differ by a line, so group on (x0, x1, y0).
+function blockKey(box: number[] | null): string | null {
+  return box ? [box[0], box[2], box[1]].map((value) => value.toFixed(2)).join(",") : null;
+}
+
+interface PageProps {
   doc: PDFDocumentProxy;
   pageNumber: number;
-  pageType: PageClassification | undefined;
-  highlights: Item[];
-  discarded: Detection[];
-  pricesById: Map<string, PositionResult>;
-  showBoxes: boolean;
+  baseSize: Size;
+  scale: number;
+  type: PageType | undefined;
+  items: Item[];
+  results: Map<string, PositionResult>;
+  states: Map<string, ItemState>;
   selectedId: string | null;
+  showBoxes: boolean;
+  root: HTMLDivElement | null;
   onSelect: (lvId: string) => void;
-  onVisible: (page: number) => void;
-  registerRef: (page: number, node: HTMLDivElement | null) => void;
-}) {
+  register: (page: number, node: HTMLDivElement | null) => void;
+}
+
+const PdfPage = memo(function PdfPage({
+  doc,
+  pageNumber,
+  baseSize,
+  scale,
+  type,
+  items,
+  results,
+  states,
+  selectedId,
+  showBoxes,
+  root,
+  onSelect,
+  register,
+}: PageProps) {
   const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [rendered, setRendered] = useState(false);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const [near, setNear] = useState(false);
+  const [ownSize, setOwnSize] = useState<Size | null>(null);
+  const size = ownSize ?? baseSize;
 
+  // Render only the pages near the viewport, and free the far ones: a tender
+  // can have hundreds of pages and every canvas holds megabytes.
   useEffect(() => {
     const node = wrapRef.current;
-    if (!node) return;
-    const lazy = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setRendered(true);
-      },
-      { rootMargin: "600px" },
+    if (!node || !root) return;
+    const observer = new IntersectionObserver(
+      (entries) => setNear(entries.some((entry) => entry.isIntersecting)),
+      { root, rootMargin: "150% 0px" },
     );
-    const current = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.intersectionRatio >= 0.5) onVisible(pageNumber);
-        }
-      },
-      { threshold: [0.5] },
-    );
-    lazy.observe(node);
-    current.observe(node);
-    return () => {
-      lazy.disconnect();
-      current.disconnect();
-    };
-  }, [pageNumber, onVisible]);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [root]);
 
   useEffect(() => {
-    if (!rendered || size) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (!near) {
+      canvas.width = 0;
+      canvas.height = 0;
+      return;
+    }
     let cancelled = false;
+    let task: RenderTask | null = null;
     (async () => {
       const page = await doc.getPage(pageNumber);
       if (cancelled) return;
-      const viewport = page.getViewport({ scale: SCALE });
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+      const natural = page.getViewport({ scale: 1 });
+      if (Math.abs(natural.width - size.width) > 1 || Math.abs(natural.height - size.height) > 1) {
+        setOwnSize({ width: natural.width, height: natural.height });
+      }
+      const ratio = window.devicePixelRatio || 1;
+      const viewport = page.getViewport({ scale: scale * ratio });
       const context = canvas.getContext("2d");
       if (!context) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: context, viewport }).promise;
-      if (!cancelled) setSize({ width: viewport.width, height: viewport.height });
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      task = page.render({ canvasContext: context, viewport });
+      await task.promise.catch(() => undefined);
     })();
     return () => {
       cancelled = true;
+      task?.cancel();
     };
-  }, [rendered, size, doc, pageNumber]);
-
-  const type = pageType?.type ?? "other";
-
-  // Variants share one description block: draw the name box once per block and
-  // label the group, instead of stacking N identical boxes.
-  // Variants share the description block's top-left and width but their bottom
-  // can differ by a line, so group on (x0, x1, y0) rather than the whole box.
-  const blockKey = (box: number[] | null) =>
-    box ? [box[0], box[2], box[1]].map((value) => value.toFixed(2)).join(",") : null;
+    // `size` only seeds ownSize; re-rendering on it would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [near, scale, doc, pageNumber]);
 
   const nameGroups = useMemo(() => {
     const map = new Map<string, Item[]>();
-    for (const item of highlights) {
-      const box = item.name_bbox ?? item.source_bbox;
-      const key = blockKey(box) ?? `solo-${item.lv_id}`;
-      const list = map.get(key) ?? [];
-      list.push(item);
-      map.set(key, list);
+    for (const item of items) {
+      const key = blockKey(item.name_bbox ?? item.source_bbox) ?? `solo-${item.lv_id}`;
+      map.set(key, [...(map.get(key) ?? []), item]);
     }
-    return [...map.values()].sort((a, b) => {
-      const ya = (a[0].name_bbox ?? a[0].source_bbox ?? [0, 0])[1];
-      const yb = (b[0].name_bbox ?? b[0].source_bbox ?? [0, 0])[1];
-      return ya - yb;
-    });
-  }, [highlights]);
+    return [...map.values()];
+  }, [items]);
 
-  const discardedGroups = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Detection[] = [];
-    for (const detection of discarded) {
-      const key = blockKey(detection.name_bbox);
-      if (key && seen.has(key)) continue;
-      if (key) seen.add(key);
-      out.push(detection);
-    }
-    return out;
-  }, [discarded]);
+  const color = type ? PAGE_TYPE_COLORS[type] : PAGE_TYPE_COLORS.other;
 
   return (
     <div
-      className="pdf-page"
+      className="pg"
       ref={(node) => {
         wrapRef.current = node;
-        registerRef(pageNumber, node);
+        register(pageNumber, node);
       }}
+      style={{ "--pc": color } as CSSProperties}
     >
-      <div className="pdf-page__label">
-        <span>{t("pdf.page", { count: pageNumber })}</span>
-        {pageType && (
-          <span
-            className={`pdf-type pdf-type--${pageType.type}`}
-            title={`${t(`pageType.${pageType.type}`)} · ${t("pdf.confidence")} ${pageType.confidence}${
-              pageType.reason ? ` · ${pageType.reason}` : ""
-            }`}
-          >
-            {t(`pageType.${pageType.type}`)}
-          </span>
-        )}
+      <div className="pg__label">
+        <span className="pg__num">{t("pdf.page", { page: pageNumber })}</span>
+        <span className="pg__type">{type ? t(`pageType.${type}`) : t("pdf.unclassified")}</span>
       </div>
       <div
-        className={`pdf-page__canvas pdf-page__canvas--${type}`}
-        style={size ? { width: size.width, height: size.height } : { minHeight: 400 }}
+        className="pg__sheet"
+        style={{ width: size.width * scale, height: size.height * scale }}
       >
         <canvas ref={canvasRef} />
         {showBoxes &&
           nameGroups.map((group) => {
             const first = group[0];
-            const nameBox = first.name_bbox ?? first.source_bbox;
-            if (!nameBox) return null;
+            const box = first.name_bbox ?? first.source_bbox;
+            if (!box) return null;
             const active = group.some((item) => item.lv_id === selectedId);
-            const status = !first.match ? "missing" : first.flags.length ? "soft" : "ok";
-            const note = !first.match ? t("pdf.noMatch") : "";
+            const state = states.get(first.lv_id) ?? "open";
             const label =
               group.length > 1
-                ? `${first.lv_id}–${group[group.length - 1].lv_id} · ${t("common.variants", { count: group.length })}`
+                ? `${first.lv_id}–${group[group.length - 1].lv_id}`
                 : first.lv_id;
             return (
               <button
                 key={`n-${first.lv_id}`}
                 type="button"
                 data-lv={first.lv_id}
-                className={`pdf-hl pdf-hl--name pdf-hl--${status} ${active ? "is-active" : ""}`}
-                style={rectOf(nameBox)}
-                title={`${label} · ${first.description_raw ?? ""}${note}`}
-                onClick={() => onSelect(first.lv_id)}
+                className={`hl hl--name hl--${state} ${active ? "is-active" : ""}`}
+                style={rectOf(box)}
+                aria-label={t("pdf.boxAria", { id: label })}
+                onClick={() => onSelect(active ? (selectedId as string) : first.lv_id)}
               >
-                <span className="pdf-hl__tag">
-                  {status === "missing" ? "⚠ " : ""}
-                  {label}
-                </span>
+                <span className="hl__tag">{label}</span>
               </button>
             );
           })}
         {showBoxes &&
-          highlights.map((item) => {
-            const priceBox = item.price_bbox;
-            if (!priceBox) return null;
+          items.map((item) => {
+            if (!item.price_bbox) return null;
             const active = item.lv_id === selectedId;
-            const price = pricesById.get(item.lv_id)?.material_cost_chf ?? null;
+            const state = states.get(item.lv_id) ?? "open";
+            const cost = results.get(item.lv_id)?.direct_position_cost_chf ?? null;
             return (
               <button
                 key={`p-${item.lv_id}`}
                 type="button"
-                data-lv={item.lv_id}
-                className={`pdf-hl pdf-hl--price ${active ? "is-active" : ""}`}
-                style={rectOf(priceBox)}
-                title={
-                  price != null
-                    ? t("pdf.priceWriteTitleWithCost", { cost: formatChf(price) })
-                    : t("pdf.priceWriteTitle")
-                }
+                className={`hl hl--price hl--${state} ${active ? "is-active" : ""}`}
+                style={rectOf(item.price_bbox)}
+                aria-label={t("pdf.priceAria", { id: item.lv_id })}
                 onClick={() => onSelect(item.lv_id)}
               >
-                <span className="pdf-hl__tag">
-                  {price != null ? formatChf(price) : t("pdf.priceTag")}
-                </span>
+                <span className="hl__tag">{cost != null ? formatChf(cost) : t("pdf.noPrice")}</span>
               </button>
-            );
-          })}
-        {showBoxes &&
-          discardedGroups.map((detection, index) => {
-            const nameBox = detection.name_bbox;
-            const priceBox = detection.price_bbox;
-            if (!nameBox && !priceBox) return null;
-            return (
-              <Fragment key={`d-${detection.page}-${index}`}>
-                {nameBox && (
-                  <span
-                    className="pdf-hl pdf-hl--discarded"
-                    style={rectOf(nameBox)}
-                    title={`${t("pdf.discarded", {
-                      reason: detection.reason ?? t("pdf.unknownReason"),
-                    })} · ${detection.description ?? ""}`}
-                  />
-                )}
-                {priceBox && (
-                  <span
-                    className="pdf-hl pdf-hl--discarded pdf-hl--discarded-price"
-                    style={rectOf(priceBox)}
-                  />
-                )}
-              </Fragment>
             );
           })}
       </div>
     </div>
   );
-}
+});
 
-type FilterKey = "all" | "lv_table" | "with_detections" | `type:${PageType}`;
-
-export function PdfViewer({
-  url,
-  items,
-  detections,
-  pageTypes,
-  pricesById,
-  selectedId,
-  expanded,
-  onToggleExpanded,
-  onSelect,
-}: {
-  url: string;
-  items: Item[];
-  detections: Detection[];
-  pageTypes: PageClassification[];
-  pricesById: Map<string, PositionResult>;
-  selectedId: string | null;
-  expanded: boolean;
-  onToggleExpanded: () => void;
-  onSelect: (lvId: string) => void;
-}) {
+export const PdfViewer = forwardRef<
+  PdfViewerHandle,
+  {
+    url: string;
+    items: Item[];
+    results: Map<string, PositionResult>;
+    states: Map<string, ItemState>;
+    pageTypes: Map<number, PageType>;
+    selectedId: string | null;
+    /** Bumped when the document should bring the selected item into view. */
+    focusKey: number;
+    onSelect: (lvId: string) => void;
+    onPageChange: (page: number) => void;
+    onPageCount: (count: number) => void;
+  }
+>(function PdfViewer(
+  { url, items, results, states, pageTypes, selectedId, focusKey, onSelect, onPageChange, onPageCount },
+  ref,
+) {
   const { t } = useI18n();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
+  const [baseSize, setBaseSize] = useState<Size | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [width, setWidth] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [showBoxes, setShowBoxes] = useState(true);
-  const [navOpen, setNavOpen] = useState(true);
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [current, setCurrent] = useState(1);
+  const [pageDraft, setPageDraft] = useState<string | null>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,206 +247,230 @@ export function PdfViewer({
     setError(null);
     const task = pdfjs.getDocument({ url });
     task.promise
-      .then((loaded) => {
-        if (!cancelled) setDoc(loaded);
+      .then(async (loaded) => {
+        const first = await loaded.getPage(1);
+        const viewport = first.getViewport({ scale: 1 });
+        if (cancelled) return;
+        setBaseSize({ width: viewport.width, height: viewport.height });
+        setDoc(loaded);
+        onPageCount(loaded.numPages);
       })
       .catch(() => {
         if (!cancelled) setError(t("pdf.openError"));
       });
     return () => {
       cancelled = true;
-      task.destroy();
+      void task.destroy();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
+
+  useEffect(() => {
+    if (!scroller) return;
+    const observer = new ResizeObserver(() => setWidth(scroller.clientWidth));
+    observer.observe(scroller);
+    setWidth(scroller.clientWidth);
+    return () => observer.disconnect();
+  }, [scroller]);
+
+  const fitScale = baseSize && width ? Math.max((width - SIDE_PAD * 2) / baseSize.width, 0.2) : 1;
+  const scale = fitScale * zoom;
 
   const byPage = useMemo(() => {
     const map = new Map<number, Item[]>();
     for (const item of items) {
       if (!item.source_page) continue;
-      const list = map.get(item.source_page) ?? [];
-      list.push(item);
-      map.set(item.source_page, list);
+      map.set(item.source_page, [...(map.get(item.source_page) ?? []), item]);
     }
     return map;
   }, [items]);
 
-  const discardedByPage = useMemo(() => {
-    const map = new Map<number, Detection[]>();
-    for (const detection of detections) {
-      if (detection.kept) continue;
-      const list = map.get(detection.page) ?? [];
-      list.push(detection);
-      map.set(detection.page, list);
-    }
-    return map;
-  }, [detections]);
-
-  const pageTypeByPage = useMemo(() => {
-    const map = new Map<number, PageClassification>();
-    for (const pageType of pageTypes) map.set(pageType.page, pageType);
-    return map;
-  }, [pageTypes]);
-
-  const counts = useMemo(() => {
-    const byType: Record<string, number> = {};
-    let lvTable = 0;
-    for (const pageType of pageTypes) {
-      byType[pageType.type] = (byType[pageType.type] ?? 0) + 1;
-      if (pageType.type === "lv_table") lvTable += 1;
-    }
-    return { byType, lvTable };
-  }, [pageTypes]);
-
-  const allPages = useMemo(
-    () => (doc ? Array.from({ length: doc.numPages }, (_, index) => index + 1) : []),
-    [doc],
-  );
-
-  const contentCount = (page: number) =>
-    (byPage.get(page)?.length ?? 0) + (discardedByPage.get(page)?.length ?? 0);
-
-  const pagesToRender = useMemo(() => {
-    if (filter === "all") return allPages;
-    if (filter === "lv_table") {
-      return allPages.filter((page) => pageTypeByPage.get(page)?.type === "lv_table");
-    }
-    if (filter === "with_detections") {
-      return allPages.filter((page) => contentCount(page) > 0);
-    }
-    const wanted = filter.slice(5) as PageType;
-    return allPages.filter((page) => pageTypeByPage.get(page)?.type === wanted);
-  }, [allPages, filter, pageTypeByPage, byPage, discardedByPage]);
-
-  const registerRef = (page: number, node: HTMLDivElement | null) => {
+  const register = useCallback((page: number, node: HTMLDivElement | null) => {
     if (node) pageRefs.current.set(page, node);
     else pageRefs.current.delete(page);
-  };
+  }, []);
 
-  const jumpTo = (page: number) => {
-    pageRefs.current.get(page)?.scrollIntoView({ block: "start" });
-  };
+  const scrollToPage = useCallback(
+    (page: number, smooth = true) => {
+      const node = pageRefs.current.get(page);
+      if (!node || !scroller) return;
+      scroller.scrollTo({ top: node.offsetTop - 10, behavior: smooth ? "smooth" : "auto" });
+    },
+    [scroller],
+  );
 
-  // Two-way sync: selecting a row scrolls the PDF to that item's exact region.
+  useImperativeHandle(ref, () => ({ scrollToPage }), [scrollToPage]);
+
+  // Which page sits under the upper third of the viewport.
   useEffect(() => {
-    if (!selectedId || !scrollRef.current) return;
-    const marker = scrollRef.current.querySelector(`[data-lv="${selectedId}"]`);
-    if (marker) {
-      marker.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-    }
-  }, [selectedId, items]);
+    if (!scroller || !doc) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const probe = scroller.scrollTop + scroller.clientHeight * 0.33;
+      let page = 1;
+      for (let number = 1; number <= doc.numPages; number += 1) {
+        const node = pageRefs.current.get(number);
+        if (!node) continue;
+        if (node.offsetTop <= probe) page = number;
+        else break;
+      }
+      setCurrent(page);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [scroller, doc, scale]);
 
-  const highlightedPages = useMemo(() => [...byPage.keys()].sort((a, b) => a - b), [byPage]);
+  useEffect(() => onPageChange(current), [current, onPageChange]);
 
-  // On first load, land on the first page that actually has highlights.
+  // Bring the selected item's row into view, a third down the viewport.
   useEffect(() => {
-    if (!doc || selectedId || highlightedPages.length === 0) return;
-    pageRefs.current.get(highlightedPages[0])?.scrollIntoView({ block: "start" });
-  }, [doc, selectedId, highlightedPages]);
-
-  // When the filter hides the current page, jump to the first visible one.
-  useEffect(() => {
-    if (pagesToRender.length === 0) return;
-    if (!pagesToRender.includes(currentPage)) jumpTo(pagesToRender[0]);
+    if (!focusKey || !selectedId || !scroller) return;
+    const item = items.find((candidate) => candidate.lv_id === selectedId);
+    if (!item?.source_page) return;
+    const node = pageRefs.current.get(item.source_page);
+    if (!node) return;
+    const box = item.name_bbox ?? item.source_bbox ?? item.price_bbox;
+    const sheet = node.querySelector<HTMLElement>(".pg__sheet");
+    const sheetTop = node.offsetTop + (sheet?.offsetTop ?? 0);
+    const y = box ? sheetTop + box[1] * (sheet?.offsetHeight ?? node.offsetHeight) : node.offsetTop;
+    scroller.scrollTo({ top: Math.max(y - scroller.clientHeight * 0.3, 0), behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, pagesToRender.length]);
+  }, [focusKey]);
+
+  // Keep the reading position when zooming.
+  const setZoomKeeping = (next: number) => {
+    const page = current;
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2)))));
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollToPage(page, false)));
+  };
+
+  const numPages = doc?.numPages ?? 0;
+  const currentType = pageTypes.get(current);
+  const commitPage = () => {
+    const value = Number.parseInt(pageDraft ?? "", 10);
+    setPageDraft(null);
+    if (Number.isFinite(value)) scrollToPage(Math.min(Math.max(value, 1), numPages));
+  };
 
   return (
-    <section className={`pdf-card ${expanded ? "is-expanded" : ""}`}>
-      <header className="pdf-card__head">
-        <button
-          type="button"
-          className="btn btn--icon"
-          aria-label={navOpen ? t("pdf.navHide") : t("pdf.navShow")}
-          onClick={() => setNavOpen((value) => !value)}
-        >
-          ☰
-        </button>
-        <h3>{t("pdf.document")}</h3>
-        <span className="pdf-card__meta">
-          {doc ? t("pdf.pagesMeta", { count: doc.numPages }) : "…"} ·{" "}
-          {t("pdf.lvTables", { count: counts.lvTable })}
-        </span>
-        <select
-          className="pdf-filter"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value as FilterKey)}
-          aria-label={t("pdf.filterAria")}
-        >
-          <option value="all">{t("pdf.filterAll")}</option>
-          <option value="lv_table">{t("pdf.filterLvTable")}</option>
-          <option value="with_detections">{t("pdf.filterDetections")}</option>
-          {(Object.keys(PAGE_TYPE_COLORS) as PageType[]).map((type) => (
-            <option key={type} value={`type:${type}`}>
-              {t(`pageType.${type}`)}
-            </option>
-          ))}
-        </select>
-        <label className="pdf-toggle">
+    <section className="pdf">
+      <header className="pdf__bar">
+        <div className="pdf__nav">
+          <button
+            type="button"
+            className="iconbtn"
+            aria-label={t("pdf.prev")}
+            disabled={current <= 1}
+            onClick={() => scrollToPage(current - 1)}
+          >
+            <ChevronLeft size={18} />
+          </button>
           <input
-            type="checkbox"
-            checked={showBoxes}
-            onChange={(event) => setShowBoxes(event.target.checked)}
+            className="pdf__page"
+            aria-label={t("pdf.pageInput")}
+            value={pageDraft ?? String(current)}
+            inputMode="numeric"
+            onFocus={(event) => event.target.select()}
+            onChange={(event) => setPageDraft(event.target.value)}
+            onBlur={commitPage}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") (event.target as HTMLInputElement).blur();
+            }}
           />
-          {t("pdf.toggleBoxes")}
-        </label>
-        <button type="button" className="btn btn--ghost" onClick={onToggleExpanded}>
-          {expanded ? t("pdf.reduce") : t("pdf.fullscreen")}
-        </button>
+          <span className="pdf__total">/ {numPages || "…"}</span>
+          <button
+            type="button"
+            className="iconbtn"
+            aria-label={t("pdf.next")}
+            disabled={current >= numPages}
+            onClick={() => scrollToPage(current + 1)}
+          >
+            <ChevronRight size={18} />
+          </button>
+          {currentType && (
+            <span
+              className="typechip"
+              style={{ "--pc": PAGE_TYPE_COLORS[currentType] } as CSSProperties}
+            >
+              {t(`pageType.${currentType}`)}
+            </span>
+          )}
+        </div>
+        <div className="pdf__tools">
+          <button
+            type="button"
+            className={`iconbtn ${showBoxes ? "is-on" : ""}`}
+            aria-pressed={showBoxes}
+            title={t("pdf.toggleBoxes")}
+            aria-label={t("pdf.toggleBoxes")}
+            onClick={() => setShowBoxes((value) => !value)}
+          >
+            <SquareDashed size={17} />
+          </button>
+          <span className="pdf__sep" />
+          <button
+            type="button"
+            className="iconbtn"
+            aria-label={t("pdf.zoomOut")}
+            onClick={() => setZoomKeeping(zoom - 0.25)}
+          >
+            <Minus size={17} />
+          </button>
+          <span className="pdf__zoom">{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            className="iconbtn"
+            aria-label={t("pdf.zoomIn")}
+            onClick={() => setZoomKeeping(zoom + 0.25)}
+          >
+            <Plus size={17} />
+          </button>
+          <button
+            type="button"
+            className="iconbtn"
+            title={t("pdf.fit")}
+            aria-label={t("pdf.fit")}
+            onClick={() => setZoomKeeping(1)}
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
       </header>
-      {error && <p className="pdf-card__error">{error}</p>}
-      <div className="pdf-card__body">
-        {navOpen && doc && (
-          <nav className="pdf-nav" aria-label={t("pdf.indexAria")}>
-            {pagesToRender.map((page) => {
-              const pageType = pageTypeByPage.get(page)?.type ?? "other";
-              const count = contentCount(page);
-              return (
-                <button
-                  key={page}
-                  type="button"
-                  className={`pdf-nav__item ${page === currentPage ? "is-current" : ""}`}
-                  onClick={() => jumpTo(page)}
-                  title={`${t(`pageType.${pageType}`)}${
-                    count ? ` · ${t("pdf.rows", { count })}` : ""
-                  }`}
-                >
-                  <span
-                    className="pdf-nav__dot"
-                    style={{ background: PAGE_TYPE_COLORS[pageType] }}
-                  />
-                  <span className="pdf-nav__num">{page}</span>
-                  {count > 0 && <span className="pdf-nav__count">{count}</span>}
-                </button>
-              );
-            })}
-            {pagesToRender.length === 0 && (
-              <p className="pdf-nav__empty">{t("pdf.navEmpty")}</p>
-            )}
-          </nav>
-        )}
-        <div className="pdf-scroll" ref={scrollRef}>
-          {doc ? (
-            pagesToRender.map((pageNumber) => (
+      {error && <p className="banner banner--error pdf__error">{error}</p>}
+      <div className="pdf__scroll" ref={setScroller}>
+        {doc && baseSize ? (
+          <div className="pdf__pages" style={{ gap: PAGE_GAP }}>
+            {Array.from({ length: doc.numPages }, (_, index) => index + 1).map((pageNumber) => (
               <PdfPage
                 key={pageNumber}
                 doc={doc}
                 pageNumber={pageNumber}
-                pageType={pageTypeByPage.get(pageNumber)}
-                highlights={byPage.get(pageNumber) ?? []}
-                discarded={discardedByPage.get(pageNumber) ?? []}
-                pricesById={pricesById}
-                showBoxes={showBoxes}
+                baseSize={baseSize}
+                scale={scale}
+                type={pageTypes.get(pageNumber)}
+                items={byPage.get(pageNumber) ?? []}
+                results={results}
+                states={states}
                 selectedId={selectedId}
+                showBoxes={showBoxes}
+                root={scroller}
                 onSelect={onSelect}
-                onVisible={setCurrentPage}
-                registerRef={registerRef}
+                register={register}
               />
-            ))
-          ) : (
-            !error && <p className="pdf-card__loading">{t("pdf.loading")}</p>
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          !error && <p className="pdf__loading">{t("pdf.loading")}</p>
+        )}
       </div>
     </section>
   );
-}
+});

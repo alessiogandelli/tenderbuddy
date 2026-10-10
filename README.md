@@ -9,14 +9,18 @@ Built at the EQUANS Sprint'd Zurich hackathon.
 
 ## What it does
 
-- **Upload** a tender PDF from a single dropzone.
+- **Upload** a tender PDF from a single dropzone, then watch it being read: a
+  tape with one cell per page fills up and takes each page's type colour.
 - **Extract** the priceable positions from the Leistungsverzeichnis (LV) tables,
   including quantity, unit and the region of the page each one came from.
 - **Match** every position against the catalogue and price it (material +
   labour), or flag it as needing a supplier quote / a human decision.
-- **Review** inside a two-pane workbench: the position list on the left, the
-  embedded PDF on the right, with two-way highlight sync — click a row and the
-  document scrolls to the exact region it came from, and vice versa.
+- **Review** the mapping: a compact item list on the left, the embedded PDF on
+  the right and, between them, the page rail coloured by page type. Two-way
+  highlight sync — click a row and the document scrolls to the exact region it
+  came from, and vice versa — and each item opens how it was read, which
+  catalogue product it was matched to and the price that came out. Unmapped
+  items can be mapped by hand or given a hand-typed unit price.
 - **Quote**: direct cost, Cost Baseline, indicative price and the
   Aggressive / Target / Conservative bid scenarios, recomputed live as you edit.
 - **Multilingual UI** in Switzerland's three main official languages (German,
@@ -128,7 +132,7 @@ extraction gate against the 22 verified positions. See
 
 ```
 backend/    FastAPI app, pipeline (extractors / steps / ai), tests
-frontend/   React workbench webapp (archive, review, quote, PDF highlights)
+frontend/   React webapp (upload, reading tape, review, parameters, price)
 data/       pricing dataset + tender PDFs (gitignored)
 docs/       contract, benchmark, demo script, tender notes
 dashboard/  planning board (milestones / progress)

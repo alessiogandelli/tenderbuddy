@@ -47,6 +47,9 @@ def test_upload_runs_pipeline_and_extracts_items(client, fresh_bando):
     assert all("name_bbox" in item and "price_bbox" in item for item in bando["items"])
     # Detections (kept + discarded vision rows) are part of the contract.
     assert "detections" in bando
+    # Page progress ends complete, so the UI can fill its page tape.
+    assert bando["pipeline"]["pages_total"] == 1
+    assert bando["pipeline"]["pages_read"] == 1
 
 
 def test_manual_item_is_priced_like_pipeline(client, fresh_bando):
@@ -111,3 +114,48 @@ def test_patch_unknown_item_is_404(client, fresh_bando):
         "/api/bandi/%s/items/NOPE" % fresh_bando, json={"quantity": 1.0}
     )
     assert response.status_code == 404
+
+
+def test_manual_price_prices_an_unmatched_item(client, fresh_bando):
+    bando = client.get("/api/bandi/%s" % fresh_bando).json()
+    lv_id = bando["items"][0]["lv_id"]
+    response = client.patch(
+        "/api/bandi/%s/items/%s" % (fresh_bando, lv_id),
+        json={"quantity": 4.0, "product_id": None, "manual_unit_price_chf": 250.0},
+    )
+    assert response.status_code == 200
+    updated = response.json()
+    item = next(i for i in updated["items"] if i["lv_id"] == lv_id)
+    assert item["match"] is None
+    assert item["status"] == "calculated"
+    assert "no_match" not in item["flags"]
+    result = next(r for r in updated["position_results"] if r["lv_id"] == lv_id)
+    assert result["price_source"] == "manual"
+    assert result["material_cost_chf"] == 1000.0
+    assert result["labour_cost_chf"] == 0.0
+    assert result["direct_position_cost_chf"] == 1000.0
+    assert updated["summary"]["direct_cost_chf"] >= 1000.0
+
+
+def test_clearing_the_manual_price_reopens_the_item(client, fresh_bando):
+    bando = client.get("/api/bandi/%s" % fresh_bando).json()
+    lv_id = bando["items"][0]["lv_id"]
+    url = "/api/bandi/%s/items/%s" % (fresh_bando, lv_id)
+    client.patch(url, json={"product_id": None, "manual_unit_price_chf": 99.0})
+    updated = client.patch(url, json={"manual_unit_price_chf": None}).json()
+    item = next(i for i in updated["items"] if i["lv_id"] == lv_id)
+    assert item["manual_unit_price_chf"] is None
+    assert item["status"] == "review_required"
+    assert "no_match" in item["flags"]
+    result = next(r for r in updated["position_results"] if r["lv_id"] == lv_id)
+    assert result["direct_position_cost_chf"] is None
+
+
+def test_negative_manual_price_is_rejected(client, fresh_bando):
+    bando = client.get("/api/bandi/%s" % fresh_bando).json()
+    lv_id = bando["items"][0]["lv_id"]
+    response = client.patch(
+        "/api/bandi/%s/items/%s" % (fresh_bando, lv_id),
+        json={"manual_unit_price_chf": -1.0},
+    )
+    assert response.status_code == 400

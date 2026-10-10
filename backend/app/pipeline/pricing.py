@@ -51,6 +51,9 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
         review_required=item.status not in (ItemStatus.CALCULATED, ItemStatus.OUT_OF_SCOPE),
     )
 
+    if item.manual_unit_price_chf is not None and item.quantity is not None:
+        return _price_manual(item, base)
+
     if item.match is None or item.quantity is None:
         return base
 
@@ -88,12 +91,27 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
     return base
 
 
+def _price_manual(item: Item, base: PositionResult) -> PositionResult:
+    """An estimator's all-in unit price: counted as material, no waste, no labour."""
+    unit_price = float(item.manual_unit_price_chf)
+    direct = item.quantity * unit_price
+    base.matched_product_id = item.match.product_id if item.match else None
+    base.net_unit_cost_chf = round(unit_price, 4)
+    base.material_cost_chf = round(direct, 2)
+    base.adjusted_install_hours = 0.0
+    base.labour_cost_chf = 0.0
+    base.direct_position_cost_chf = round(direct, 2)
+    base.price_source = PriceSource.MANUAL
+    return base
+
+
 def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
     material = sum(r.material_cost_chf or 0.0 for r in results)
     labour = sum(r.labour_cost_chf or 0.0 for r in results)
     project = db.project_costs_chf() if db.include_project_costs else 0.0
     direct = material + labour + project
-    baseline = direct * (1.0 + db.overhead_pct / 100.0) * (1.0 + db.transport_pct / 100.0)
+    with_overhead = direct * (1.0 + db.overhead_pct / 100.0)
+    baseline = with_overhead * (1.0 + db.transport_pct / 100.0)
     indicative = baseline / (1.0 - db.target_margin_pct / 100.0)
     return Summary(
         material_cost_chf=round(material, 2),
@@ -103,6 +121,9 @@ def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
         indicative_selling_price_chf=round(indicative, 2),
         project_costs_chf=round(project, 2),
         include_project_costs=db.include_project_costs,
+        overhead_chf=round(with_overhead - direct, 2),
+        transport_equipment_chf=round(baseline - with_overhead, 2),
+        margin_chf=round(indicative - baseline, 2),
     )
 
 
@@ -178,6 +199,15 @@ def reconcile_item(item: Item, db: PricingDB) -> Item:
         resolved.add(ItemFlag.MISSING_DESCRIPTION)
 
     flags = [flag for flag in item.flags if flag not in resolved]
+
+    if item.manual_unit_price_chf is not None and item.quantity is not None:
+        # A human priced it: nothing is left to match.
+        item.flags = [
+            flag for flag in flags
+            if flag not in (ItemFlag.NO_MATCH, ItemFlag.LOW_CONFIDENCE_MATCH)
+        ]
+        item.status = ItemStatus.CALCULATED
+        return item
 
     def ensure(flag: ItemFlag, present: bool) -> None:
         if present and flag not in flags:

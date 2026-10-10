@@ -1,8 +1,8 @@
 # Bando → Preventivo — Webapp
 
-The single webapp for the tender→quote flow: archive of tenders, review of what
-is uncertain, the priced quote, the embedded tender PDF with highlights, and the
-Catalogo. It talks to the backend **only** through the frozen JSON contract in
+The single webapp for the tender→quote flow: upload a tender, watch it being
+read, check how every item was mapped to the catalogue next to the PDF, tune the
+pricing parameters, read the price. It talks to the backend **only** through the frozen JSON contract in
 [`docs/contract/README.md`](docs/contract/README.md). It never computes prices.
 
 ## Requirements
@@ -31,14 +31,27 @@ single port.
 
 ## Screens
 
-- **Carica un bando** (`/`) — a single dropzone and a compact list of recent
-  bandi (Titolo, classificazione, prezzo indicativo).
-- **Workbench** (`/bandi/:id`) — a full-screen processing overlay while the
-  pipeline runs, then a two-pane review: the position list on the left (inline
-  editing, filter by "Da rivedere"/"Senza match", search, arrow-key navigation)
-  and the PDF on the right with two-way highlight sync that scrolls to the exact
-  region. A sticky header shows the live indicative price; a footer strip shows
-  the cost breakdown, the three bid scenarios and the AI usage badge.
+- **Upload** (`/`) — a single dropzone. Uploading is the only thing to do here.
+- **Reading** (`/bandi/:id` while the pipeline runs) — only the pages: a counter
+  of pages read and a tape with one cell per page that fills as the tender is
+  read (`pipeline.pages_read`). When the pages are classified every cell takes
+  its page type's colour and a legend appears; quantity-table pages pulse while
+  their positions are extracted. When the run is done the tape flies into the
+  next screen and becomes its page rail — no button to press.
+- **Items** (`/bandi/:id`) — three columns: a compact list of every item (name,
+  quantity, direct cost, grouped by system; filters *No price / To check /
+  Priced*), the **page rail** (one cell per page coloured by type; it marks the
+  page in view and the selected item's page, click or drag to move, the palette
+  button opens the colour legend), and the PDF with the name and price boxes of
+  every item and a coloured page-type marker on every page. Selecting an item in
+  the list or a box in the PDF highlights it on the other side and opens how it
+  was mapped: *1 read in the tender → 2 catalogue product (with confidence) → 3
+  price*. Unmapped items can be mapped by hand from a searchable catalogue
+  picker, or priced with a hand-typed unit price; the quantity can be corrected.
+- **Parameters** (`/bandi/:id/parameters`) — every pricing parameter in
+  collapsible groups with − / + steppers; each change re-prices the tender.
+- **Price & bid** (`/bandi/:id/price`) — the offer for the chosen bid scenario,
+  how complete it is, the steps from cost to price and the three scenarios.
 
 ## Languages
 
@@ -60,18 +73,22 @@ typecheck`. Numbers, CHF amounts and dates follow the active locale.
 ```
 src/
   api/          typed contract client + types (this side of the seam)
-  components/   Layout, QuoteTable, ProcessingOverlay, PdfViewer,
-                ItemDetailPanel, AnimatedChf
-  pages/        LandingPage, WorkbenchPage
+  components/   Layout, TenderHeader, ProcessingStage (page tape), TapeMorph
+                (tape → rail hand-over), PageRail, PdfViewer, ItemList,
+                ItemDetail (mapping + hand fixes), AnimatedChf
+  pages/        UploadPage, TenderPage (phases + tabs), ReviewPage,
+                ParametersPage, PricePage
   i18n/         locale bundles (en, de-CH, fr-CH, it-CH) + provider/hook
-  lib/          locale-aware formatting + enum logic (colors, attention flags)
+  lib/          locale-aware formatting, item states, page-type colours,
+                parameter groups
   styles.css    the design system (high contrast, readable, no framework)
 ```
 
 ## UX notes
 
 The people who must adopt this are not technical, so the interface is deliberately
-small: one dropzone, one workbench. Statuses are words, not just colours; the
-"Da rivedere" filter makes uncertainty impossible to miss; and every price figure
+small: one dropzone, one review screen. Statuses are words, not just colours;
+the *No price* filter makes what is missing impossible to miss; page colours
+always come with a label (tooltip, legend, page marker); and every price figure
 traces back to a page of the PDF — clicking a row scrolls the document to the
 exact region it came from.

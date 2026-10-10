@@ -30,7 +30,11 @@ Rules:
     "updated_at": "2026-10-10T09:05:00Z",
     "error": null,          // string when status = "failed"
     "item_count": 269,      // live progress: positions extracted so far
-    "message": "Completed" // live progress: text of the step in progress (English)
+    "message": "Completed", // live progress: text of the step in progress (English)
+    "pages_total": 202,     // additive: page progress, see §5
+    "pages_read": 202,
+    "lv_pages_total": 121,
+    "lv_pages_done": 121
   },
 
   "profile": {              // Pricing profile applied
@@ -149,6 +153,7 @@ Every priceable row of the Bando. It is born from the pipeline **or** from manua
     "confidence": 0.92,
     "price_source": "catalog"        // "catalog" | "supplier_package"
   },
+  "manual_unit_price_chf": null,     // additive: estimator's all-in unit price, see §5
 
   "status": "calculated",            // enum §5
   "flags": ["multi_variant_expanded"] // array, may be empty; enum §5
@@ -193,7 +198,12 @@ Identical to the schema already present in `data/expected_output_example.json`. 
   "indicative_selling_price_chf": 438612.83,  // additive, see §4
   // Additive: project costs and whether they are included in direct_cost_chf.
   "project_costs_chf": 0.0,
-  "include_project_costs": false
+  "include_project_costs": false,
+  // Additive: the steps from direct cost to price (baseline = direct + overhead
+  // + transport; indicative = baseline + margin), so the UI does no math.
+  "overhead_chf": 31679.51,
+  "transport_equipment_chf": 10109.49,
+  "margin_chf": 24123.71
 }
 
 // recommended_bid_range
@@ -268,7 +278,9 @@ All enum values are canonical **English**. They are the machine vocabulary share
 **`flags`** (uncertainty flags, array):
 `missing_quantity` | `missing_unit` | `unclear_unit` | `no_match` | `low_confidence_match` | `multi_variant_ambiguous` | `multi_variant_expanded` | `missing_description` | `unparsed_row` | `out_of_scope` | `language_uncertain`
 
-**`price_source`**: `catalog` | `supplier_package`
+**`price_source`**: `catalog` | `supplier_package` | `manual` (additive: the position is priced with `manual_unit_price_chf`)
+
+**`manual_unit_price_chf`** (additive, on an Item): an all-in direct unit cost typed by the estimator. When set (and the quantity is known) it wins over the catalogue match: `material_cost_chf = quantity × manual_unit_price_chf` (no waste), `labour_cost_chf = 0`, `price_source = manual`, status `calculated`, and the `no_match` / `low_confidence_match` flags are dropped. `null` = not set.
 
 **`pipeline.step`**: `read` | `classify_pages` | `parse` | `overview` | `classify` | `canonicalize` | `match` | `price` | `aggregate`
 
@@ -281,6 +293,8 @@ All enum values are canonical **English**. They are the machine vocabulary share
 **`pipeline.status`**: `pending` | `running` | `done` | `failed`
 
 **`pipeline.message`** / **`pipeline.item_count`**: live progress for the processing screen. The frontend reads them while the status is `running` to show the current step and count the positions extracted so far.
+
+**`pipeline.pages_total`** / **`pipeline.pages_read`** (additive): pages of the PDF, and how many have been read and classified so far (saved mid-step, a few times per second). **`pipeline.lv_pages_total`** / **`pipeline.lv_pages_done`**: how many LV-table pages the vision engine reads, and how many it has finished (0 on the deterministic path). The processing screen fills its page tape from them.
 
 **`overview`** (additive): a panorama of the whole document. `engine` is `luna` when a model reads it, `deterministic` when it is derived from the Items (AI off or failed). `materials_needed` and `labour_needed` are used by the user and by matching.
 
@@ -307,7 +321,7 @@ All enum values are canonical **English**. They are the machine vocabulary share
 | POST | `/api/bandi/{id}/run` | re-run the pipeline | `Bando` |
 | PUT | `/api/bandi/{id}/items` | replace `items` (manual path) | `Bando` |
 | POST | `/api/bandi/{id}/items` | add a manual Item | `Bando` |
-| PATCH | `/api/bandi/{id}/items/{lv_id}` | edit a position (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`) | `Bando` |
+| PATCH | `/api/bandi/{id}/items/{lv_id}` | edit a position (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`, `manual_unit_price_chf`). An explicit `null` for `product_id` removes the match, for `manual_unit_price_chf` removes the hand price; omitted fields are unchanged | `Bando` |
 | GET | `/api/bandi/{id}/pdf` | the source PDF | `application/pdf` |
 | GET | `/api/bandi/{id}/export` | export the quote | JSON or CSV |
 | GET | `/api/catalog` | Products | `Product[]` |

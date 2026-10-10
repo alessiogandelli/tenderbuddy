@@ -47,6 +47,8 @@ class ItemFlag(StrEnum):
 class PriceSource(StrEnum):
     CATALOG = "catalog"
     SUPPLIER_PACKAGE = "supplier_package"
+    # A unit price typed by the estimator; it overrides the catalogue match.
+    MANUAL = "manual"
 
 
 class PipelineStep(StrEnum):

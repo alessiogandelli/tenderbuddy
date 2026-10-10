@@ -12,6 +12,7 @@ network call is made.
 from __future__ import annotations
 
 import copy
+import time
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -35,6 +36,9 @@ from .pricing_db import PricingDB, get_pricing_db
 from ..util import now_iso
 
 OnStep = Callable[[PipelineStep, PipelineStatus, Optional[str]], None]
+
+# Page progress is saved mid-step for the UI, throttled to spare the disk.
+PROGRESS_SAVE_INTERVAL_S = 0.25
 
 
 def _with_bando_parameters(bando: Bando, db: PricingDB) -> PricingDB:
@@ -76,21 +80,30 @@ def _match_context(overview: Optional[Overview]) -> str:
     return "\n".join(bits)
 
 
-def _classify_pages(document, use_ai: bool, usage: UsageLedger) -> List:
+def _classify_pages(
+    document, use_ai: bool, usage: UsageLedger,
+    on_progress: Optional[Callable[[int], None]] = None,
+) -> List:
     """Label every page, AI-first with a deterministic fallback (never empty)."""
-    if not use_ai:
-        return steps_pkg.classify_pages_deterministic(document)
-    try:
-        return classify_pages(document, usage=usage)
-    except Exception:  # noqa: BLE001 - classification must never lose pages
-        return steps_pkg.classify_pages_deterministic(document)
+    if use_ai:
+        try:
+            return classify_pages(document, usage=usage, on_progress=on_progress)
+        except Exception:  # noqa: BLE001 - classification must never lose pages
+            pass
+    return steps_pkg.classify_pages_deterministic(document)
 
 
 def _parse_items(
     document, reader: PdfReader, pdf_path: Path, use_ai: bool, usage: UsageLedger,
     deep: bool, page_types: List,
+    on_lv_pages: Optional[Callable[[int], None]] = None,
+    on_page: Optional[Callable[[], None]] = None,
 ) -> tuple:
-    """Return ``(items, detections)``; detections are empty on the text paths."""
+    """Return ``(items, detections)``; detections are empty on the text paths.
+
+    ``on_lv_pages`` receives how many LV pages will be read, ``on_page`` fires
+    once per LV page read by the vision engine.
+    """
     if not use_ai:
         return (
             steps_pkg.parse_document(document, reader, pdf_path, with_geometry=True),
@@ -103,9 +116,11 @@ def _parse_items(
     if not pages:
         # No LV table classified: fall back to the header heuristic.
         pages = lv_pages(document)
+    if on_lv_pages:
+        on_lv_pages(len(pages))
 
     vision = extract_document_vision(
-        document, reader, pdf_path, pages=pages, usage=usage
+        document, reader, pdf_path, pages=pages, usage=usage, on_page=on_page
     )
     items = vision.items
     detections = vision.detections
@@ -168,22 +183,52 @@ def run_pipeline(
         if on_step:
             on_step(step, status, error)
 
+    last_saved = [0.0]
+
+    def progress(force: bool = False) -> None:
+        """Persist page progress mid-step, at most a few times per second."""
+        now = time.monotonic()
+        if on_step and (force or now - last_saved[0] >= PROGRESS_SAVE_INTERVAL_S):
+            last_saved[0] = now
+            bando.pipeline.updated_at = now_iso()
+            on_step(bando.pipeline.step, bando.pipeline.status, None)
+
+    def pages_read(count: int) -> None:
+        bando.pipeline.pages_read = min(count, bando.pipeline.pages_total)
+        progress()
+
+    def lv_pages(total: int) -> None:
+        bando.pipeline.lv_pages_total = total
+        bando.pipeline.lv_pages_done = 0
+        progress(force=True)
+
+    def lv_page_done() -> None:
+        bando.pipeline.lv_pages_done += 1
+        progress()
+
     try:
+        bando.pipeline.pages_read = 0
+        bando.pipeline.lv_pages_total = 0
+        bando.pipeline.lv_pages_done = 0
         emit(PipelineStep.READ, PipelineStatus.RUNNING, message="Reading PDF")
         document = steps_pkg.read_pdf(reader, pdf_path)
         bando.page_count = document.page_count
+        bando.pipeline.pages_total = document.page_count
 
         emit(
             PipelineStep.CLASSIFY_PAGES,
             PipelineStatus.RUNNING,
             message="Classifying pages",
         )
-        bando.page_types = _classify_pages(document, use_ai, usage)
+        bando.page_types = _classify_pages(document, use_ai, usage, on_progress=pages_read)
+        bando.pipeline.pages_read = document.page_count
 
         emit(PipelineStep.PARSE, PipelineStatus.RUNNING, message="Extracting positions")
         items, detections = _parse_items(
-            document, reader, pdf_path, use_ai, usage, deep, bando.page_types
+            document, reader, pdf_path, use_ai, usage, deep, bando.page_types,
+            on_lv_pages=lv_pages, on_page=lv_page_done,
         )
+        bando.pipeline.lv_pages_done = bando.pipeline.lv_pages_total
         bando.detections = detections
         bando.pipeline.item_count = len(items)
 
