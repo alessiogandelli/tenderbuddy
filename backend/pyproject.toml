@@ -1,0 +1,56 @@
+[project]
+name = "bando-backend"
+version = "0.1.0"
+description = "Backend for Bando -> Preventivo: extract tender PDFs into priced quotes."
+readme = "README.md"
+requires-python = ">=3.8,<3.9"
+authors = [{ name = "Equans Sprintd team" }]
+dependencies = [
+  "fastapi>=0.115,<0.116",
+  "uvicorn[standard]>=0.30,<0.31",
+  "pydantic>=2,<3",
+  "python-multipart>=0.0.9",
+  "PyMuPDF>=1.24,<1.25",
+  "pypdf>=5,<6",
+  "pandas>=2,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+bando-seed = "app.seed:main"
+
+# Poetry 1.x does not read PEP 621 [project]; mirror the metadata so
+# `poetry install` works alongside `uv` and plain `pip`.
+[tool.poetry]
+name = "bando-backend"
+version = "0.1.0"
+description = "Backend for Bando -> Preventivo: extract tender PDFs into priced quotes."
+authors = ["Equans Sprintd team"]
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.9"
+fastapi = ">=0.115,<0.116"
+uvicorn = { version = ">=0.30,<0.31", extras = ["standard"] }
+pydantic = ">=2,<3"
+python-multipart = ">=0.0.9"
+PyMuPDF = ">=1.24,<1.25"
+pypdf = ">=5,<6"
+pandas = ">=2,<3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8"
+httpx = ">=0.27"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
