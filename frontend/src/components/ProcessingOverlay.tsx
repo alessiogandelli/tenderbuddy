@@ -1,5 +1,6 @@
 import type { PipelineState } from "../api/types";
-import { PIPELINE_ORDER, STEP_LABELS } from "../lib/flags";
+import { PIPELINE_ORDER } from "../lib/flags";
+import { useI18n } from "../i18n";
 
 const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -11,6 +12,7 @@ export function ProcessingOverlay({
   pipeline: PipelineState;
   title?: string | null;
 }) {
+  const { t } = useI18n();
   const steps = PIPELINE_ORDER;
   const activeIndex = steps.indexOf(pipeline.step);
   const progress =
@@ -41,17 +43,15 @@ export function ProcessingOverlay({
           </span>
         </div>
 
-        <h2 className="processing__title">
-          {title ?? "Analisi del documento"}
-        </h2>
+        <h2 className="processing__title">{title || t("processing.title")}</h2>
         <p className="processing__msg">
           {failed
-            ? pipeline.error ?? "Elaborazione interrotta."
-            : pipeline.message ?? "Avvio dell'elaborazione…"}
+            ? pipeline.error ?? t("processing.stopped")
+            : t(`step.${pipeline.step}`)}
         </p>
         {pipeline.item_count > 0 && !failed && (
           <p className="processing__count">
-            {pipeline.item_count} posizioni estratte finora
+            {t("processing.extracted", { count: pipeline.item_count })}
           </p>
         )}
 
@@ -68,7 +68,7 @@ export function ProcessingOverlay({
             return (
               <li key={step} className={`proc-step proc-step--${state}`}>
                 <span className="proc-step__dot" aria-hidden />
-                {STEP_LABELS[step]}
+                {t(`step.${step}`)}
               </li>
             );
           })}

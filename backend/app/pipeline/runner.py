@@ -161,25 +161,26 @@ def run_pipeline(
         bando.pipeline.step = step
         bando.pipeline.status = status
         bando.pipeline.error = error
-        if message is not None:
-            bando.pipeline.message = message
+        # Canonical English only: the UI translates `step`/`status` into the
+        # user's language, so this free text is never localized here.
+        bando.pipeline.message = message
         bando.pipeline.updated_at = now_iso()
         if on_step:
             on_step(step, status, error)
 
     try:
-        emit(PipelineStep.READ, PipelineStatus.RUNNING, message="Lettura del PDF")
+        emit(PipelineStep.READ, PipelineStatus.RUNNING, message="Reading PDF")
         document = steps_pkg.read_pdf(reader, pdf_path)
         bando.page_count = document.page_count
 
         emit(
             PipelineStep.CLASSIFY_PAGES,
             PipelineStatus.RUNNING,
-            message="Classificazione delle pagine",
+            message="Classifying pages",
         )
         bando.page_types = _classify_pages(document, use_ai, usage)
 
-        emit(PipelineStep.PARSE, PipelineStatus.RUNNING, message="Estrazione posizioni")
+        emit(PipelineStep.PARSE, PipelineStatus.RUNNING, message="Extracting positions")
         items, detections = _parse_items(
             document, reader, pdf_path, use_ai, usage, deep, bando.page_types
         )
@@ -189,7 +190,7 @@ def run_pipeline(
         emit(
             PipelineStep.OVERVIEW,
             PipelineStatus.RUNNING,
-            message="Panoramica del documento",
+            message="Document overview",
         )
         bando.overview = steps_pkg.build_overview(
             document, items, db, use_ai=use_ai and deep, usage=usage
@@ -198,7 +199,7 @@ def run_pipeline(
         emit(
             PipelineStep.CLASSIFY,
             PipelineStatus.RUNNING,
-            message="%d posizioni estratte" % len(items),
+            message="%d positions extracted" % len(items),
         )
         title, description, classification = steps_pkg.classify_document(
             document, bando.source_file or ""
@@ -208,18 +209,18 @@ def run_pipeline(
         bando.description = bando.description or description
         bando.classification = classification
 
-        emit(PipelineStep.CANONICALIZE, PipelineStatus.RUNNING, message="Normalizzazione")
+        emit(PipelineStep.CANONICALIZE, PipelineStatus.RUNNING, message="Normalising")
         items = steps_pkg.canonicalize_items(items)
 
-        emit(PipelineStep.MATCH, PipelineStatus.RUNNING, message="Match catalogo")
+        emit(PipelineStep.MATCH, PipelineStatus.RUNNING, message="Catalogue match")
         _match_items(items, db, use_ai, usage, context=_match_context(bando.overview), deep=deep)
 
         bando.items = items
 
-        emit(PipelineStep.PRICE, PipelineStatus.RUNNING, message="Calcolo prezzo")
+        emit(PipelineStep.PRICE, PipelineStatus.RUNNING, message="Computing price")
         bando.position_results = steps_pkg.price_items(items, db)
 
-        emit(PipelineStep.AGGREGATE, PipelineStatus.RUNNING, message="Sintesi e offerta")
+        emit(PipelineStep.AGGREGATE, PipelineStatus.RUNNING, message="Summary and bid")
         bando.summary, bando.recommended_bid_range = steps_pkg.aggregate(
             bando.position_results, db
         )
@@ -227,7 +228,7 @@ def run_pipeline(
         bando.usage = usage.as_dict() if use_ai else None
         bando.updated_at = now_iso()
 
-        emit(PipelineStep.AGGREGATE, PipelineStatus.DONE, message="Completato")
+        emit(PipelineStep.AGGREGATE, PipelineStatus.DONE, message="Completed")
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI as a failure
         emit(bando.pipeline.step, PipelineStatus.FAILED, str(exc))
         raise

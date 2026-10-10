@@ -40,15 +40,31 @@ single port.
   region. A sticky header shows the live indicative price; a footer strip shows
   the cost breakdown, the three bid scenarios and the AI usage badge.
 
+## Languages
+
+The UI ships in Switzerland's three main official languages — **German
+(`de-CH`), French (`fr-CH`), Italian (`it-CH`)** — plus **English** as the
+canonical fallback. A switcher in the top bar persists the choice per browser;
+when the browser language isn't Swiss, the app falls back to English.
+
+Categorization stays **English**: the backend's contract enums (`classification`,
+`page_type`, `status`, `flag`, `step`) are the canonical values, and the UI maps
+each one to a localized label at render time. Labels live in
+`src/i18n/<locale>.ts`, keyed by the English value (e.g.
+`t("status." + item.status)`, `t("classification." + bando.classification)`), so
+the English bundle is the source of truth and a missing key fails `pnpm
+typecheck`. Numbers, CHF amounts and dates follow the active locale.
+
 ## Layout
 
 ```
 src/
   api/          typed contract client + types (this side of the seam)
-  components/   Layout, PositionRow, SummaryBar, ProcessingOverlay,
-                PdfViewer, AnimatedChf, StatusPill
+  components/   Layout, QuoteTable, ProcessingOverlay, PdfViewer,
+                ItemDetailPanel, AnimatedChf
   pages/        LandingPage, WorkbenchPage
-  lib/          formatting + Italian labels for the contract enums
+  i18n/         locale bundles (en, de-CH, fr-CH, it-CH) + provider/hook
+  lib/          locale-aware formatting + enum logic (colors, attention flags)
   styles.css    the design system (high contrast, readable, no framework)
 ```
 

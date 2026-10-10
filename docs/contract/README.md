@@ -30,7 +30,7 @@ Rules:
     "updated_at": "2026-10-10T09:05:00Z",
     "error": null,          // string when status = "failed"
     "item_count": 269,      // live progress: positions extracted so far
-    "message": "Completato" // live progress: text of the step in progress
+    "message": "Completed" // live progress: text of the step in progress (English)
   },
 
   "profile": {              // Pricing profile applied
@@ -257,6 +257,8 @@ With the supplied parameters: `reference_win_probability = 0.55`, `strategic_app
 ---
 
 ## 5. Enums
+
+All enum values are canonical **English**. They are the machine vocabulary shared by both sides; the client translates them into the user's language (German, French, Italian, English) at render time, keyed by these exact values. The backend never stores localized labels.
 
 **`unit`**: `pc` | `m` | `m2` | `h` | `LS` | `system` — German documents use `Stk` → `pc`.
 

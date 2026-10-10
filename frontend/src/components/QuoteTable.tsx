@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Item, PositionResult, Product, Unit } from "../api/types";
 import { formatChf, formatNumber } from "../lib/format";
-import { FLAG_LABELS } from "../lib/flags";
+import { useI18n } from "../i18n";
 
 const UNITS: Unit[] = ["pc", "m", "m2", "h", "LS", "system"];
+
+// Sentinel for items without a system; rendered as a localized label.
+const NO_SYSTEM = "";
 
 export interface RowSavePatch {
   description_raw?: string;
@@ -28,6 +31,7 @@ function ItemEditor({
   onCancel: () => void;
   onSave: (patch: RowSavePatch) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [description, setDescription] = useState(item.description_raw ?? "");
   const [quantity, setQuantity] = useState(item.quantity?.toString() ?? "");
   const [unit, setUnit] = useState<Unit>(item.unit ?? "pc");
@@ -66,7 +70,7 @@ function ItemEditor({
       />
       <div className="item__edit-grid">
         <label>
-          Quantità
+          {t("quote.quantity")}
           <input
             value={quantity}
             inputMode="decimal"
@@ -74,7 +78,7 @@ function ItemEditor({
           />
         </label>
         <label>
-          Unità
+          {t("quote.unit")}
           <select value={unit} onChange={(event) => setUnit(event.target.value as Unit)}>
             {UNITS.map((value) => (
               <option key={value} value={value}>
@@ -84,9 +88,9 @@ function ItemEditor({
           </select>
         </label>
         <label className="item__edit-product">
-          Prodotto di catalogo
+          {t("quote.product")}
           <select value={productId} onChange={(event) => setProductId(event.target.value)}>
-            <option value="">— nessuno —</option>
+            <option value="">{t("quote.productNone")}</option>
             {products.map((product) => (
               <option key={product.product_id} value={product.product_id}>
                 {product.product_id} · {product.description ?? product.model ?? ""}
@@ -96,12 +100,12 @@ function ItemEditor({
         </label>
       </div>
       <div className="item__edit-actions">
-        <span className="item__edit-hint">⌘/Ctrl+Invio salva · Esc annulla</span>
+        <span className="item__edit-hint">{t("quote.editHint")}</span>
         <button type="button" className="btn btn--ghost" onClick={onCancel}>
-          Annulla
+          {t("common.cancel")}
         </button>
         <button type="button" className="btn btn--primary" disabled={saving} onClick={save}>
-          {saving ? "Salvo…" : "Salva"}
+          {saving ? t("common.saving") : t("common.save")}
         </button>
       </div>
     </div>
@@ -117,9 +121,10 @@ function Amount({
   missing: boolean;
   tone?: "strong" | "soft";
 }) {
+  const { t } = useI18n();
   if (missing) {
     return <span className={tone === "soft" ? "todo-tag todo-tag--soft" : "todo-tag"}>
-      Da aggiungere
+      {t("quote.toAdd")}
     </span>;
   }
   if (typeof value === "number" && value > 0) return <>{formatChf(value)}</>;
@@ -142,6 +147,7 @@ function ItemCard({
   onSelect: () => void;
   onSave: (patch: RowSavePatch) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
   const number = posNumber(item);
 
@@ -161,7 +167,7 @@ function ItemCard({
 
   const missingMaterial = !item.match;
   const missingLabour = !result?.install_code;
-  const tooltip = item.flags.map((flag) => FLAG_LABELS[flag]).join(" · ");
+  const tooltip = item.flags.map((flag) => t(`flag.${flag}`)).join(" · ");
 
   return (
     <div
@@ -181,7 +187,7 @@ function ItemCard({
       {/* line 1 — material */}
       <span className="item__pos">{number ?? item.lv_id}</span>
       <span className="item__desc" title={item.description_raw ?? undefined}>
-        {item.description_normalized ?? item.description_raw ?? "Senza descrizione"}
+        {item.description_normalized ?? item.description_raw ?? t("quote.noDescription")}
       </span>
       <span className="item__qty">
         {formatNumber(item.quantity)} <small>{item.unit ?? "?"}</small>
@@ -193,8 +199,8 @@ function ItemCard({
       {/* line 2 — labour */}
       <span className="item__tag">{item.match?.product_id ?? "—"}</span>
       <span className="item__sub" title={tooltip || undefined}>
-        {result?.install_code ?? "install code mancante"}
-        {item.source_page ? ` · p. ${item.source_page}` : ""}
+        {result?.install_code ?? t("quote.installCodeMissing")}
+        {item.source_page ? ` · ${t("pdf.onPage", { page: item.source_page })}` : ""}
       </span>
       <span className="item__qty item__qty--labour">
         {result?.adjusted_install_hours != null
@@ -215,17 +221,17 @@ export interface QuoteGroup {
 
 // Group by system so repeated CPN codes (UTA1 vs UTA2) stay distinguishable and
 // the list is digestible. Groups keep the document order (first appearance);
-// items without a system fall to the end.
+// items without a system fall to the end. `system` is "" for "no system".
 export function groupItems(items: Item[]): QuoteGroup[] {
   const groups = new Map<string, Item[]>();
   for (const item of items) {
-    const key = item.system?.trim() || "Senza sistema";
+    const key = item.system?.trim() || NO_SYSTEM;
     const list = groups.get(key) ?? [];
     list.push(item);
     groups.set(key, list);
   }
   return [...groups.entries()]
-    .sort((a, b) => (a[0] === "Senza sistema" ? 1 : b[0] === "Senza sistema" ? -1 : 0))
+    .sort((a, b) => (a[0] === NO_SYSTEM ? 1 : b[0] === NO_SYSTEM ? -1 : 0))
     .map(([system, groupItems]) => ({ system, items: groupItems }));
 }
 
@@ -244,6 +250,7 @@ function GroupBlock({
   onSelect: (lvId: string) => void;
   onSave: (lvId: string, patch: RowSavePatch) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(true);
   const subtotal = useMemo(
     () =>
@@ -258,8 +265,10 @@ function GroupBlock({
     <section className="group">
       <button type="button" className="group__head" onClick={() => setOpen((value) => !value)}>
         <span className={`group__caret ${open ? "is-open" : ""}`}>▸</span>
-        <span className="group__name">{group.system}</span>
-        <span className="group__count">{group.items.length} voci</span>
+        <span className="group__name">{group.system || t("quote.noSystem")}</span>
+        <span className="group__count">
+          {t("common.entries", { count: group.items.length })}
+        </span>
         <span className="group__total">
           {subtotal > 0 ? formatChf(subtotal) : <span className="amount--muted">—</span>}
         </span>
@@ -298,9 +307,10 @@ export function QuoteList({
   onSelect: (lvId: string) => void;
   onSave: (lvId: string, patch: RowSavePatch) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const groups = useMemo(() => groupItems(items), [items]);
   if (items.length === 0) {
-    return <p className="quote-empty">Nessuna posizione per questo filtro.</p>;
+    return <p className="quote-empty">{t("quote.empty")}</p>;
   }
   return (
     <div className="quote">

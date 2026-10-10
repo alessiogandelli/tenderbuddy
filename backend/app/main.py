@@ -55,7 +55,7 @@ def create_app() -> FastAPI:
         errors = exc.errors()
         first = errors[0] if errors else {}
         location = ".".join(str(part) for part in first.get("loc", []) if part != "body")
-        message = first.get("msg", "Richiesta non valida")
+        message = first.get("msg", "Invalid request")
         if location:
             message = "%s (%s)" % (message, location)
         return JSONResponse(

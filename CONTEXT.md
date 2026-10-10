@@ -2,6 +2,8 @@
 
 Turn a **Bando** (a tender document) into a readable, defensible **Preventivo** (quote): the PDF is uploaded, the engine extracts the items, links them to pricing data and produces costs, an indicative price and a bid range — explicitly flagging everything it did not understand.
 
+Categorization is canonical **English**: the contract enums (classification, page type, status, flag, pipeline step) are English values, and the UI translates them into the user's language at render time (German, French, Italian, English).
+
 ## Language
 
 ### Document

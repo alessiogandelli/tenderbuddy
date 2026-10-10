@@ -19,6 +19,9 @@ Built at the EQUANS Sprint'd Zurich hackathon.
   document scrolls to the exact region it came from, and vice versa.
 - **Quote**: direct cost, Cost Baseline, indicative price and the
   Aggressive / Target / Conservative bid scenarios, recomputed live as you edit.
+- **Multilingual UI** in Switzerland's three main official languages (German,
+  French, Italian) plus English; categories are canonical English values,
+  translated at render time.
 
 Every number traces back to a page, and every uncertainty is a visible flag.
 Nothing is silently dropped.

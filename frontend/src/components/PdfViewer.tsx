@@ -4,7 +4,8 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { Detection, Item, PageClassification, PageType, PositionResult } from "../api/types";
 import { formatChf } from "../lib/format";
-import { PAGE_TYPE_COLORS, PAGE_TYPE_LABELS } from "../lib/flags";
+import { PAGE_TYPE_COLORS } from "../lib/flags";
+import { useI18n } from "../i18n";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -46,6 +47,7 @@ function PdfPage({
   onVisible: (page: number) => void;
   registerRef: (page: number, node: HTMLDivElement | null) => void;
 }) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rendered, setRendered] = useState(false);
@@ -143,15 +145,15 @@ function PdfPage({
       }}
     >
       <div className="pdf-page__label">
-        <span>Pagina {pageNumber}</span>
+        <span>{t("pdf.page", { count: pageNumber })}</span>
         {pageType && (
           <span
             className={`pdf-type pdf-type--${pageType.type}`}
-            title={`${PAGE_TYPE_LABELS[pageType.type]} · confidenza ${pageType.confidence}${
+            title={`${t(`pageType.${pageType.type}`)} · ${t("pdf.confidence")} ${pageType.confidence}${
               pageType.reason ? ` · ${pageType.reason}` : ""
             }`}
           >
-            {PAGE_TYPE_LABELS[pageType.type]}
+            {t(`pageType.${pageType.type}`)}
           </span>
         )}
       </div>
@@ -167,10 +169,10 @@ function PdfPage({
             if (!nameBox) return null;
             const active = group.some((item) => item.lv_id === selectedId);
             const status = !first.match ? "missing" : first.flags.length ? "soft" : "ok";
-            const note = !first.match ? " · senza match nel catalogo" : "";
+            const note = !first.match ? t("pdf.noMatch") : "";
             const label =
               group.length > 1
-                ? `${first.lv_id}–${group[group.length - 1].lv_id} · ${group.length} varianti`
+                ? `${first.lv_id}–${group[group.length - 1].lv_id} · ${t("common.variants", { count: group.length })}`
                 : first.lv_id;
             return (
               <button
@@ -202,11 +204,15 @@ function PdfPage({
                 data-lv={item.lv_id}
                 className={`pdf-hl pdf-hl--price ${active ? "is-active" : ""}`}
                 style={rectOf(priceBox)}
-                title={`Prezzo da scrivere qui${price != null ? ` · ${formatChf(price)}` : ""}`}
+                title={
+                  price != null
+                    ? t("pdf.priceWriteTitleWithCost", { cost: formatChf(price) })
+                    : t("pdf.priceWriteTitle")
+                }
                 onClick={() => onSelect(item.lv_id)}
               >
                 <span className="pdf-hl__tag">
-                  {price != null ? formatChf(price) : "prezzo"}
+                  {price != null ? formatChf(price) : t("pdf.priceTag")}
                 </span>
               </button>
             );
@@ -222,7 +228,9 @@ function PdfPage({
                   <span
                     className="pdf-hl pdf-hl--discarded"
                     style={rectOf(nameBox)}
-                    title={`Riga scartata (${detection.reason ?? "n/d"}) · ${detection.description ?? ""}`}
+                    title={`${t("pdf.discarded", {
+                      reason: detection.reason ?? t("pdf.unknownReason"),
+                    })} · ${detection.description ?? ""}`}
                   />
                 )}
                 {priceBox && (
@@ -262,6 +270,7 @@ export function PdfViewer({
   onToggleExpanded: () => void;
   onSelect: (lvId: string) => void;
 }) {
+  const { t } = useI18n();
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showBoxes, setShowBoxes] = useState(true);
@@ -281,7 +290,7 @@ export function PdfViewer({
         if (!cancelled) setDoc(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("Impossibile aprire il PDF di questo bando.");
+        if (!cancelled) setError(t("pdf.openError"));
       });
     return () => {
       cancelled = true;
@@ -386,27 +395,28 @@ export function PdfViewer({
         <button
           type="button"
           className="btn btn--icon"
-          aria-label={navOpen ? "Nascondi indice pagine" : "Mostra indice pagine"}
+          aria-label={navOpen ? t("pdf.navHide") : t("pdf.navShow")}
           onClick={() => setNavOpen((value) => !value)}
         >
           ☰
         </button>
-        <h3>Documento di gara</h3>
+        <h3>{t("pdf.document")}</h3>
         <span className="pdf-card__meta">
-          {doc ? `${doc.numPages} pagine` : "…"} · {counts.lvTable} Tabella LV
+          {doc ? t("pdf.pagesMeta", { count: doc.numPages }) : "…"} ·{" "}
+          {t("pdf.lvTables", { count: counts.lvTable })}
         </span>
         <select
           className="pdf-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value as FilterKey)}
-          aria-label="Filtra pagine"
+          aria-label={t("pdf.filterAria")}
         >
-          <option value="all">Tutte le pagine</option>
-          <option value="lv_table">Solo Tabella LV</option>
-          <option value="with_detections">Con rilevamenti</option>
-          {(Object.keys(PAGE_TYPE_LABELS) as PageType[]).map((type) => (
+          <option value="all">{t("pdf.filterAll")}</option>
+          <option value="lv_table">{t("pdf.filterLvTable")}</option>
+          <option value="with_detections">{t("pdf.filterDetections")}</option>
+          {(Object.keys(PAGE_TYPE_COLORS) as PageType[]).map((type) => (
             <option key={type} value={`type:${type}`}>
-              {PAGE_TYPE_LABELS[type]}
+              {t(`pageType.${type}`)}
             </option>
           ))}
         </select>
@@ -416,16 +426,16 @@ export function PdfViewer({
             checked={showBoxes}
             onChange={(event) => setShowBoxes(event.target.checked)}
           />
-          Box
+          {t("pdf.toggleBoxes")}
         </label>
         <button type="button" className="btn btn--ghost" onClick={onToggleExpanded}>
-          {expanded ? "Riduci" : "Schermo intero"}
+          {expanded ? t("pdf.reduce") : t("pdf.fullscreen")}
         </button>
       </header>
       {error && <p className="pdf-card__error">{error}</p>}
       <div className="pdf-card__body">
         {navOpen && doc && (
-          <nav className="pdf-nav" aria-label="Indice pagine">
+          <nav className="pdf-nav" aria-label={t("pdf.indexAria")}>
             {pagesToRender.map((page) => {
               const pageType = pageTypeByPage.get(page)?.type ?? "other";
               const count = contentCount(page);
@@ -435,7 +445,9 @@ export function PdfViewer({
                   type="button"
                   className={`pdf-nav__item ${page === currentPage ? "is-current" : ""}`}
                   onClick={() => jumpTo(page)}
-                  title={`${PAGE_TYPE_LABELS[pageType]}${count ? ` · ${count} righe` : ""}`}
+                  title={`${t(`pageType.${pageType}`)}${
+                    count ? ` · ${t("pdf.rows", { count })}` : ""
+                  }`}
                 >
                   <span
                     className="pdf-nav__dot"
@@ -446,7 +458,9 @@ export function PdfViewer({
                 </button>
               );
             })}
-            {pagesToRender.length === 0 && <p className="pdf-nav__empty">Nessuna pagina.</p>}
+            {pagesToRender.length === 0 && (
+              <p className="pdf-nav__empty">{t("pdf.navEmpty")}</p>
+            )}
           </nav>
         )}
         <div className="pdf-scroll" ref={scrollRef}>
@@ -468,7 +482,7 @@ export function PdfViewer({
               />
             ))
           ) : (
-            !error && <p className="pdf-card__loading">Carico il documento…</p>
+            !error && <p className="pdf-card__loading">{t("pdf.loading")}</p>
           )}
         </div>
       </div>

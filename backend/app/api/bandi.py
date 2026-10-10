@@ -64,7 +64,7 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 def _get_or_404(bando_id: str) -> Bando:
     bando = storage.get_bando(bando_id)
     if bando is None:
-        raise HTTPException(status_code=404, detail="Bando %s non trovato" % bando_id)
+        raise HTTPException(status_code=404, detail="Bando %s not found" % bando_id)
     return bando
 
 
@@ -80,7 +80,7 @@ async def upload_bando(
     description: Optional[str] = Form(None),
 ) -> dict:
     if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Serve un file PDF")
+        raise HTTPException(status_code=400, detail="A PDF file is required")
 
     content = await file.read()
     bando_id = "bnd_" + uuid.uuid4().hex[:12]
@@ -175,7 +175,7 @@ def run_bando(bando_id: str, deep: bool = False) -> dict:
     bando = _get_or_404(bando_id)
     pdf = storage.pdf_path(bando_id)
     if not pdf.exists():
-        return _error(400, "invalid_input", "PDF non disponibile per questo Bando")
+        return _error(400, "invalid_input", "PDF not available for this Bando")
     # Mark it running now so the UI starts polling and the button never looks dead.
     bando.pipeline.step = PipelineStep.READ
     bando.pipeline.status = PipelineStatus.RUNNING
@@ -212,7 +212,7 @@ def patch_item(bando_id: str, lv_id: str, patch: ItemPatch) -> dict:
     bando = _get_or_404(bando_id)
     item = next((existing for existing in bando.items if existing.lv_id == lv_id), None)
     if item is None:
-        raise HTTPException(status_code=404, detail="Posizione %s non trovata" % lv_id)
+        raise HTTPException(status_code=404, detail="Position %s not found" % lv_id)
 
     if patch.description_raw is not None:
         item.description_raw = patch.description_raw
@@ -255,7 +255,7 @@ def get_pdf(bando_id: str) -> FileResponse:
     _get_or_404(bando_id)
     pdf = storage.pdf_path(bando_id)
     if not pdf.exists():
-        raise HTTPException(status_code=404, detail="PDF non disponibile")
+        raise HTTPException(status_code=404, detail="PDF not available")
     return FileResponse(pdf, media_type="application/pdf", filename="%s.pdf" % bando_id)
 
 

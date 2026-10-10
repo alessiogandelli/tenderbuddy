@@ -1,8 +1,14 @@
-"""Step 2 - Classify: guess Titolo, Descrizione and Classificazione of the Bando."""
+"""Step 2 - Classify: guess the title, description and classification of a Bando.
+
+Only the *classification* is a canonical value (English, from the contract enum);
+the title and description are left empty when they would only be a language-
+specific default, so the UI can render a localized fallback. Categorization stays
+English and is translated at presentation time.
+"""
 from __future__ import annotations
 
 import re
-from typing import Tuple
+from typing import Optional, Tuple
 
 from ...domain.enums import Classification
 from ..extractors import Document
@@ -22,14 +28,6 @@ _KEYWORDS = {
     Classification.PLUMBING: ("sanitär", "wasser", "abwasser", "rohr"),
     Classification.ELECTRICAL: ("elektro", "strom", "beleuchtung", "kabel"),
     Classification.BUILDING: ("mauer", "beton", "gebäude", "rohbau"),
-}
-
-_TITLES = {
-    Classification.VENTILATION: "Sistema di ventilazione",
-    Classification.HVAC: "Impianto di riscaldamento / climatizzazione",
-    Classification.PLUMBING: "Impianto sanitario",
-    Classification.ELECTRICAL: "Impianto elettrico",
-    Classification.BUILDING: "Lavori edili",
 }
 
 _BKP_RE = re.compile(r"BKP\s*(\d+)", re.IGNORECASE)
@@ -57,7 +55,9 @@ def _clean_text(document: Document) -> str:
     return "\n".join(lines)
 
 
-def classify_document(document: Document, source_file: str) -> Tuple[str, str, Classification]:
+def classify_document(
+    document: Document, source_file: str
+) -> Tuple[Optional[str], Optional[str], Classification]:
     cleaned = _clean_text(document)
     text = cleaned.lower()
 
@@ -76,15 +76,13 @@ def classify_document(document: Document, source_file: str) -> Tuple[str, str, C
 
     bkp = _BKP_RE.search(source_file) or _BKP_RE.search(text)
 
-    title = _TITLES.get(classification, "Bando")
+    # Title and description stay None unless we have real, language-neutral
+    # content (a BKP number or the project name); the UI localizes the rest.
     parts = []
     if bkp:
         parts.append("BKP " + bkp.group(1))
     if project:
         parts.append(project)
-    description = " — ".join(parts) if parts else (source_file or "Bando senza descrizione")
+    description = " — ".join(parts) if parts else None
 
-    if classification == Classification.OTHER:
-        title = "Bando"
-
-    return title, description, classification
+    return None, description, classification

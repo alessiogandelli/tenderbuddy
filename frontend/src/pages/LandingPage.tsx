@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { BandoSummary } from "../api/types";
 import { formatChf, formatDate } from "../lib/format";
-import { CLASSIFICATION_LABELS } from "../lib/flags";
+import { useI18n } from "../i18n";
 
 export function LandingPage() {
+  const { t } = useI18n();
   const [bandi, setBandi] = useState<BandoSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -20,8 +21,8 @@ export function LandingPage() {
         setBandi(list);
         setError(null);
       })
-      .catch(() => setError("Non riesco a contattare il backend. È avviato su :8000?"));
-  }, []);
+      .catch(() => setError(t("landing.errorBackend")));
+  }, [t]);
 
   const upload = async (file: File) => {
     setUploading(true);
@@ -30,7 +31,7 @@ export function LandingPage() {
       const bando = await api.upload(file);
       navigate(`/bandi/${bando.id}`);
     } catch {
-      setError("Caricamento non riuscito. Riprova con un PDF.");
+      setError(t("landing.errorUpload"));
       setUploading(false);
     }
   };
@@ -39,12 +40,9 @@ export function LandingPage() {
     <div className="landing">
       <section className="hero">
         <h1 className="hero__title">
-          Dal bando al <em>primo prezzo</em>.
+          {t("landing.titleLead")} <em>{t("landing.titleAccent")}</em>
         </h1>
-        <p className="hero__sub">
-          Carica il PDF di gara. Ogni cifra resta agganciata alla pagina da cui è
-          stata presa, e ogni posizione incerta è modificabile.
-        </p>
+        <p className="hero__sub">{t("landing.subtitle")}</p>
 
         <button
           type="button"
@@ -67,10 +65,10 @@ export function LandingPage() {
             {uploading ? "…" : "↑"}
           </span>
           <span className="dropzone__label">
-            {uploading ? "Carico il documento…" : "Trascina qui il PDF del bando"}
+            {uploading ? t("landing.dropzoneBusy") : t("landing.dropzoneIdle")}
           </span>
           <span className="dropzone__hint">
-            {uploading ? "Preparo l'elaborazione" : "oppure clicca per scegliere un file"}
+            {uploading ? t("landing.dropzoneBusyHint") : t("landing.dropzoneHint")}
           </span>
         </button>
         <input
@@ -86,13 +84,13 @@ export function LandingPage() {
 
         <ol className="how">
           <li>
-            <span className="how__n">1</span> Carica il PDF di gara
+            <span className="how__n">1</span> {t("landing.how1")}
           </li>
           <li>
-            <span className="how__n">2</span> Rivedi ogni voce con la sua fonte
+            <span className="how__n">2</span> {t("landing.how2")}
           </li>
           <li>
-            <span className="how__n">3</span> Leggi il preventivo, esportalo
+            <span className="how__n">3</span> {t("landing.how3")}
           </li>
         </ol>
 
@@ -101,7 +99,7 @@ export function LandingPage() {
 
       {bandi.length > 0 && (
         <section className="recent">
-          <h2 className="recent__title">Bandi recenti</h2>
+          <h2 className="recent__title">{t("landing.recent")}</h2>
           <ul className="recent__list">
             {bandi.map((bando) => (
               <li key={bando.id}>
@@ -111,12 +109,17 @@ export function LandingPage() {
                   onClick={() => navigate(`/bandi/${bando.id}`)}
                 >
                   <span className="recent__name">
-                    {bando.title ?? "Bando senza titolo"}
+                    {bando.title ||
+                      (bando.classification !== "other"
+                        ? t(`classification.${bando.classification}`)
+                        : t("common.untitledTender"))}
                   </span>
                   <span className="chip chip--soft">
-                    {CLASSIFICATION_LABELS[bando.classification]}
+                    {t(`classification.${bando.classification}`)}
                   </span>
-                  <span className="recent__meta">{bando.page_count} pagine</span>
+                  <span className="recent__meta">
+                    {t("common.pages", { count: bando.page_count })}
+                  </span>
                   <span className="recent__date">{formatDate(bando.created_at)}</span>
                   <span className="recent__price">
                     {formatChf(bando.totals.indicative_price_chf)}

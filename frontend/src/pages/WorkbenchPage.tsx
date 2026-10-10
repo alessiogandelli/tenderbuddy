@@ -8,36 +8,38 @@ import { PdfViewer } from "../components/PdfViewer";
 import { ProcessingOverlay } from "../components/ProcessingOverlay";
 import { QuoteList, type RowSavePatch } from "../components/QuoteTable";
 import { formatChf } from "../lib/format";
-import { CLASSIFICATION_LABELS, itemNeedsAttention } from "../lib/flags";
+import { itemNeedsAttention } from "../lib/flags";
+import { useI18n } from "../i18n";
 
 interface QuoteFilter {
   key: string;
-  label: string;
+  labelKey: string;
   test: (item: Item) => boolean;
 }
 
 const FILTERS: QuoteFilter[] = [
-  { key: "all", label: "Tutte", test: () => true },
-  { key: "missing", label: "Da aggiungere", test: (item) => !item.match },
+  { key: "all", labelKey: "workbench.filterAll", test: () => true },
+  { key: "missing", labelKey: "workbench.filterMissing", test: (item) => !item.match },
   {
     key: "no_quantity",
-    label: "Quantità mancante",
+    labelKey: "workbench.filterMissingQty",
     test: (item) => item.flags.includes("missing_quantity"),
   },
   {
     key: "supplier",
-    label: "Serve preventivo",
+    labelKey: "workbench.filterSupplier",
     test: (item) => item.status === "supplier_quote_required",
   },
   {
     key: "attention",
-    label: "Da sistemare",
+    labelKey: "workbench.filterAttention",
     test: (item) => itemNeedsAttention(item.status, item.flags),
   },
 ];
 
 export function WorkbenchPage() {
   const { id = "" } = useParams();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [bando, setBando] = useState<Bando | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -56,9 +58,9 @@ export function WorkbenchPage() {
       setTitleDraft(loaded.title ?? "");
       setError(null);
     } catch {
-      setError("Bando non trovato.");
+      setError(t("workbench.notFound"));
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     void load();
@@ -126,12 +128,12 @@ export function WorkbenchPage() {
       <div className="center">
         <p className="banner banner--error">{error}</p>
         <button type="button" className="btn" onClick={() => navigate("/")}>
-          Torna all'inizio
+          {t("workbench.backHome")}
         </button>
       </div>
     );
   }
-  if (!bando) return <div className="center muted">Carico il bando…</div>;
+  if (!bando) return <div className="center muted">{t("workbench.loading")}</div>;
 
   if (bando.pipeline.status === "running" || bando.pipeline.status === "pending") {
     return <ProcessingOverlay pipeline={bando.pipeline} title={bando.title} />;
@@ -145,7 +147,7 @@ export function WorkbenchPage() {
         <button
           type="button"
           className="btn btn--icon"
-          aria-label="Torna all'inizio"
+          aria-label={t("workbench.backAria")}
           onClick={() => navigate("/")}
         >
           ←
@@ -154,8 +156,8 @@ export function WorkbenchPage() {
           <input
             className="wb-title"
             value={titleDraft}
-            placeholder="Titolo del bando"
-            aria-label="Titolo del bando"
+            placeholder={t("workbench.titlePlaceholder")}
+            aria-label={t("workbench.titleAria")}
             onChange={(event) => setTitleDraft(event.target.value)}
             onBlur={async () => {
               if (titleDraft !== bando.title) {
@@ -164,30 +166,32 @@ export function WorkbenchPage() {
             }}
           />
           <div className="wb-head__meta">
-            <span className="chip chip--soft">{CLASSIFICATION_LABELS[bando.classification]}</span>
+            <span className="chip chip--soft">
+              {t(`classification.${bando.classification}`)}
+            </span>
             <span>{bando.source_file}</span>
-            <span>{bando.page_count} pagine</span>
-            <span>{counts.all} posizioni</span>
+            <span>{t("common.pages", { count: bando.page_count })}</span>
+            <span>{t("common.positions", { count: counts.all })}</span>
           </div>
         </div>
         <div className="wb-head__actions">
           <a className="btn" href={api.exportUrl(id, "csv")}>
-            Esporta CSV
+            {t("workbench.exportCsv")}
           </a>
           <button
             type="button"
             className="btn"
             onClick={async () => setBando(await api.runPipeline(id))}
           >
-            Rilancia
+            {t("workbench.rerun")}
           </button>
           <button
             type="button"
             className="btn"
-            title="Rilancia con analisi profonda (più lenta): panoramica documento ed escalation dei match incerti."
+            title={t("workbench.rerunDeepTitle")}
             onClick={async () => setBando(await api.runPipeline(id, true))}
           >
-            Rilancia profonda
+            {t("workbench.rerunDeep")}
           </button>
           <button
             type="button"
@@ -197,41 +201,46 @@ export function WorkbenchPage() {
               navigate("/");
             }}
           >
-            Elimina
+            {t("workbench.delete")}
           </button>
         </div>
       </header>
 
       {bando.pipeline.status === "failed" && (
         <p className="banner banner--error">
-          Elaborazione non riuscita: {bando.pipeline.error}
+          {t("workbench.failed", { error: bando.pipeline.error ?? "" })}
         </p>
       )}
 
       <div className="wb-summary">
         <div className="stat">
-          <span className="stat__label">Materiali</span>
+          <span className="stat__label">{t("workbench.statMaterials")}</span>
           <span className="stat__value">{formatChf(summary.material_cost_chf)}</span>
         </div>
         <div className="stat">
-          <span className="stat__label">Manodopera</span>
+          <span className="stat__label">{t("workbench.statLabour")}</span>
           <span className="stat__value">{formatChf(summary.labour_cost_chf)}</span>
         </div>
         <div className="stat">
-          <span className="stat__label">Costo diretto</span>
+          <span className="stat__label">{t("workbench.statDirectCost")}</span>
           <span className="stat__value">{formatChf(summary.direct_cost_chf)}</span>
         </div>
         <div className="stat stat--price">
-          <span className="stat__label">Prezzo indicativo</span>
+          <span className="stat__label">{t("workbench.statIndicative")}</span>
           <span className="stat__value">
             <AnimatedChf value={summary.indicative_selling_price_chf} />
           </span>
-          <span className="stat__sub">Cost baseline {formatChf(summary.cost_baseline_chf)}</span>
+          <span className="stat__sub">
+            {t("workbench.statCostBaseline", {
+              value: formatChf(summary.cost_baseline_chf),
+            })}
+          </span>
         </div>
         {bando.usage && (
           <span className="usage">
             <span className="usage__spark" />
-            {bando.usage.calls} chiamate · ${bando.usage.cost_usd.toFixed(2)}
+            {t("common.calls", { count: bando.usage.calls })} · $
+            {bando.usage.cost_usd.toFixed(2)}
           </span>
         )}
       </div>
@@ -247,14 +256,14 @@ export function WorkbenchPage() {
               }`}
               onClick={() => setFilterKey(filter.key)}
             >
-              {filter.label}
+              {t(filter.labelKey)}
               <span className="todo-chip__count">{counts[filter.key] ?? 0}</span>
             </button>
           ))}
         </div>
         <input
           className="search"
-          placeholder="Cerca posizione, descrizione, prodotto, sistema…"
+          placeholder={t("workbench.searchPlaceholder")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
