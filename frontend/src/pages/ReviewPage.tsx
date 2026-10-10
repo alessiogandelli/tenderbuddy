@@ -1,19 +1,24 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { api } from "../api/client";
 import { ItemList, type SelectSource } from "../components/ItemList";
-import type { ItemPatch } from "../components/ItemDetail";
+import type { ItemPatch } from "../components/ItemCard";
 import { PageRail } from "../components/PageRail";
 import { PdfViewer, type PdfViewerHandle } from "../components/PdfViewer";
+import { SplitLayout } from "../components/SplitLayout";
 import { itemState, type ItemState } from "../lib/flags";
 import { pageTypeMap } from "../lib/pageTypes";
+import { useI18n } from "../i18n";
 import { useTender } from "./tenderContext";
 
 /**
  * The review screen: the items read from the tender on the left, the tender
- * itself on the right, and between them the page rail. Selecting an item on
- * either side highlights it on the other.
+ * itself on the right, and between them the page rail, which is also the
+ * divider of the resizable split. Selecting an item on either side highlights
+ * it on the other.
  */
 export function ReviewPage() {
+  const { t } = useI18n();
   const { bando, setBando, products, productsById, rules, arriving } = useTender();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState(0);
@@ -58,47 +63,77 @@ export function ReviewPage() {
 
   return (
     <div className="review">
-      <section className="review__list">
-        <ItemList
-          items={bando.items}
-          results={results}
-          states={states}
-          productsById={productsById}
-          products={products}
-          rules={rules}
-          types={types}
-          parameters={bando.parameters}
-          selectedId={selectedId}
-          onSelect={select}
-          onShowInPdf={onShowInPdf}
-          onSave={save}
-        />
-      </section>
-      <PageRail
-        pageCount={railCount}
-        pageTypes={bando.page_types}
-        types={types}
-        itemsPerPage={itemsPerPage}
-        current={currentPage}
-        selectedPage={selected?.source_page ?? null}
-        hidden={arriving}
-        onJump={(page, smooth) => pdfRef.current?.scrollToPage(page, smooth)}
+      <SplitLayout
+        left={(split) => (
+          <section className="review__list">
+            <ItemList
+              items={bando.items}
+              results={results}
+              states={states}
+              productsById={productsById}
+              products={products}
+              rules={rules}
+              types={types}
+              parameters={bando.parameters}
+              selectedId={selectedId}
+              onSelect={select}
+              onShowInPdf={onShowInPdf}
+              onSave={save}
+              headerAction={
+                <button
+                  type="button"
+                  className="iconbtn"
+                  title={split.rightCollapsed ? t("split.showDocument") : t("split.widenList")}
+                  aria-label={split.rightCollapsed ? t("split.showDocument") : t("split.widenList")}
+                  onClick={split.maximizeLeft}
+                >
+                  {split.rightCollapsed ? <PanelRightOpen size={18} /> : <PanelRightClose size={18} />}
+                </button>
+              }
+            />
+          </section>
+        )}
+        right={(split) => (
+          <div className="review__right">
+            <PageRail
+              pageCount={railCount}
+              pageTypes={bando.page_types}
+              types={types}
+              itemsPerPage={itemsPerPage}
+              current={currentPage}
+              selectedPage={selected?.source_page ?? null}
+              hidden={arriving}
+              onJump={(page, smooth) => pdfRef.current?.scrollToPage(page, smooth)}
+            />
+            <section className="review__pdf">
+              <PdfViewer
+                ref={pdfRef}
+                url={api.pdfUrl(bando.id)}
+                items={bando.items}
+                results={results}
+                states={states}
+                pageTypes={types}
+                selectedId={selectedId}
+                focusKey={focusKey}
+                onSelect={onPdfSelect}
+                onPageChange={setCurrentPage}
+                onPageCount={setPageCount}
+                leading={
+                  <button
+                    type="button"
+                    className="iconbtn"
+                    title={split.leftCollapsed ? t("split.showList") : t("split.widenDocument")}
+                    aria-label={split.leftCollapsed ? t("split.showList") : t("split.widenDocument")}
+                    onClick={split.maximizeRight}
+                  >
+                    {split.leftCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+                  </button>
+                }
+              />
+            </section>
+          </div>
+        )}
       />
-      <section className="review__pdf">
-        <PdfViewer
-          ref={pdfRef}
-          url={api.pdfUrl(bando.id)}
-          items={bando.items}
-          results={results}
-          states={states}
-          pageTypes={types}
-          selectedId={selectedId}
-          focusKey={focusKey}
-          onSelect={onPdfSelect}
-          onPageChange={setCurrentPage}
-          onPageCount={setPageCount}
-        />
-      </section>
     </div>
   );
 }

@@ -4,15 +4,17 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus, SquareDashed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, MoveHorizontal, Plus, SquareDashed } from "lucide-react";
 import type { Item, PageType, PositionResult } from "../api/types";
 import type { ItemState } from "../lib/flags";
 import { formatChf } from "../lib/format";
@@ -23,8 +25,15 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const PAGE_GAP = 36;
 const SIDE_PAD = 34;
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
+// Canvases are re-rendered at the new resolution only once the size settles;
+// while a panel is dragged the pages are resized by CSS and the bitmaps stretch.
+const RENDER_SETTLE_MS = 150;
+
+/** Fit width follows the container; a manual zoom is an absolute scale. */
+type Zoom = { mode: "fit" } | { mode: "manual"; scale: number };
 
 type Size = { width: number; height: number };
 
@@ -51,7 +60,8 @@ interface PageProps {
   doc: PDFDocumentProxy;
   pageNumber: number;
   baseSize: Size;
-  scale: number;
+  /** Resolution the canvas is drawn at; the on-screen size follows `--s`. */
+  renderScale: number;
   type: PageType | undefined;
   items: Item[];
   results: Map<string, PositionResult>;
@@ -67,7 +77,7 @@ const PdfPage = memo(function PdfPage({
   doc,
   pageNumber,
   baseSize,
-  scale,
+  renderScale,
   type,
   items,
   results,
@@ -116,13 +126,24 @@ const PdfPage = memo(function PdfPage({
         setOwnSize({ width: natural.width, height: natural.height });
       }
       const ratio = window.devicePixelRatio || 1;
-      const viewport = page.getViewport({ scale: scale * ratio });
+      const viewport = page.getViewport({ scale: renderScale * ratio });
+      // Draw off screen and swap when done, so the old bitmap (stretched by
+      // CSS) stays visible meanwhile instead of flashing blank.
+      const buffer = document.createElement("canvas");
+      buffer.width = Math.floor(viewport.width);
+      buffer.height = Math.floor(viewport.height);
+      const bufferContext = buffer.getContext("2d");
+      if (!bufferContext) return;
+      task = page.render({ canvasContext: bufferContext, viewport });
+      const ok = await task.promise.then(
+        () => true,
+        () => false,
+      );
       const context = canvas.getContext("2d");
-      if (!context) return;
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      task = page.render({ canvasContext: context, viewport });
-      await task.promise.catch(() => undefined);
+      if (!ok || cancelled || !context) return;
+      canvas.width = buffer.width;
+      canvas.height = buffer.height;
+      context.drawImage(buffer, 0, 0);
     })();
     return () => {
       cancelled = true;
@@ -130,7 +151,7 @@ const PdfPage = memo(function PdfPage({
     };
     // `size` only seeds ownSize; re-rendering on it would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [near, scale, doc, pageNumber]);
+  }, [near, renderScale, doc, pageNumber]);
 
   const nameGroups = useMemo(() => {
     const map = new Map<string, Item[]>();
@@ -158,7 +179,10 @@ const PdfPage = memo(function PdfPage({
       </div>
       <div
         className="pg__sheet"
-        style={{ width: size.width * scale, height: size.height * scale }}
+        style={{
+          width: `calc(var(--s) * ${size.width}px)`,
+          height: `calc(var(--s) * ${size.height}px)`,
+        }}
       >
         <canvas ref={canvasRef} />
         {showBoxes &&
@@ -224,9 +248,23 @@ export const PdfViewer = forwardRef<
     onSelect: (lvId: string) => void;
     onPageChange: (page: number) => void;
     onPageCount: (count: number) => void;
+    /** Controls shown first in the toolbar (e.g. the panel collapse button). */
+    leading?: ReactNode;
   }
 >(function PdfViewer(
-  { url, items, results, states, pageTypes, selectedId, focusKey, onSelect, onPageChange, onPageCount },
+  {
+    url,
+    items,
+    results,
+    states,
+    pageTypes,
+    selectedId,
+    focusKey,
+    onSelect,
+    onPageChange,
+    onPageCount,
+    leading,
+  },
   ref,
 ) {
   const { t } = useI18n();
@@ -234,7 +272,7 @@ export const PdfViewer = forwardRef<
   const [baseSize, setBaseSize] = useState<Size | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [width, setWidth] = useState(0);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState<Zoom>({ mode: "fit" });
   const [showBoxes, setShowBoxes] = useState(true);
   const [current, setCurrent] = useState(1);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
@@ -274,7 +312,32 @@ export const PdfViewer = forwardRef<
   }, [scroller]);
 
   const fitScale = baseSize && width ? Math.max((width - SIDE_PAD * 2) / baseSize.width, 0.2) : 1;
-  const scale = fitScale * zoom;
+  const scale = zoom.mode === "fit" ? fitScale : zoom.scale;
+  const measured = Boolean(baseSize && width);
+
+  // The canvases follow `scale` only once it settles (the first real one at once).
+  const [renderScale, setRenderScale] = useState(scale);
+  const settled = useRef(false);
+  useEffect(() => {
+    if (!measured) return;
+    if (!settled.current) {
+      settled.current = true;
+      setRenderScale(scale);
+      return;
+    }
+    const timer = window.setTimeout(() => setRenderScale(scale), RENDER_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [scale, measured]);
+
+  // Reading position: the page at the top of the viewport and how far into it.
+  // Kept up to date while scrolling, restored whenever the scale changes, so a
+  // resize or a zoom never moves the reader to another place.
+  const anchor = useRef<{ page: number; ratio: number } | null>(null);
+  const sheetOf = (page: number) => {
+    const node = pageRefs.current.get(page);
+    const sheet = node?.querySelector<HTMLElement>(".pg__sheet");
+    return node && sheet ? { top: node.offsetTop + sheet.offsetTop, height: sheet.offsetHeight } : null;
+  };
 
   const byPage = useMemo(() => {
     const map = new Map<number, Item[]>();
@@ -301,21 +364,28 @@ export const PdfViewer = forwardRef<
 
   useImperativeHandle(ref, () => ({ scrollToPage }), [scrollToPage]);
 
-  // Which page sits under the upper third of the viewport.
+  // Which page sits under the upper third of the viewport, and the anchor.
   useEffect(() => {
     if (!scroller || !doc) return;
     let frame = 0;
-    const update = () => {
-      frame = 0;
-      const probe = scroller.scrollTop + scroller.clientHeight * 0.33;
+    const pageAt = (y: number) => {
       let page = 1;
       for (let number = 1; number <= doc.numPages; number += 1) {
         const node = pageRefs.current.get(number);
         if (!node) continue;
-        if (node.offsetTop <= probe) page = number;
+        if (node.offsetTop <= y) page = number;
         else break;
       }
-      setCurrent(page);
+      return page;
+    };
+    const update = () => {
+      frame = 0;
+      setCurrent(pageAt(scroller.scrollTop + scroller.clientHeight * 0.33));
+      const top = pageAt(scroller.scrollTop);
+      const sheet = sheetOf(top);
+      if (sheet && sheet.height > 0) {
+        anchor.current = { page: top, ratio: (scroller.scrollTop - sheet.top) / sheet.height };
+      }
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -326,7 +396,17 @@ export const PdfViewer = forwardRef<
       scroller.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [scroller, doc, scale]);
+    // Re-bound only for a new document; the scale is handled by the anchor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scroller, doc]);
+
+  useLayoutEffect(() => {
+    const saved = anchor.current;
+    if (!scroller || !saved) return;
+    const sheet = sheetOf(saved.page);
+    if (sheet) scroller.scrollTop = sheet.top + saved.ratio * sheet.height;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, scroller]);
 
   useEffect(() => onPageChange(current), [current, onPageChange]);
 
@@ -345,11 +425,10 @@ export const PdfViewer = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
 
-  // Keep the reading position when zooming.
-  const setZoomKeeping = (next: number) => {
-    const page = current;
-    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2)))));
-    requestAnimationFrame(() => requestAnimationFrame(() => scrollToPage(page, false)));
+  // A manual zoom leaves fit width until it is chosen again.
+  const zoomBy = (direction: 1 | -1) => {
+    const next = Math.round((scale + direction * ZOOM_STEP) / ZOOM_STEP) * ZOOM_STEP;
+    setZoom({ mode: "manual", scale: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next)) });
   };
 
   const numPages = doc?.numPages ?? 0;
@@ -364,6 +443,7 @@ export const PdfViewer = forwardRef<
     <section className="pdf">
       <header className="pdf__bar">
         <div className="pdf__nav">
+          {leading}
           <button
             type="button"
             className="iconbtn"
@@ -420,41 +500,44 @@ export const PdfViewer = forwardRef<
             type="button"
             className="iconbtn"
             aria-label={t("pdf.zoomOut")}
-            onClick={() => setZoomKeeping(zoom - 0.25)}
+            disabled={scale <= MIN_ZOOM}
+            onClick={() => zoomBy(-1)}
           >
             <Minus size={17} />
           </button>
-          <span className="pdf__zoom">{Math.round(zoom * 100)}%</span>
+          <span className="pdf__zoom" aria-live="polite">
+            {Math.round(scale * 100)}%
+          </span>
           <button
             type="button"
             className="iconbtn"
             aria-label={t("pdf.zoomIn")}
-            onClick={() => setZoomKeeping(zoom + 0.25)}
+            disabled={scale >= MAX_ZOOM}
+            onClick={() => zoomBy(1)}
           >
             <Plus size={17} />
           </button>
           <button
             type="button"
-            className="iconbtn"
-            title={t("pdf.fit")}
-            aria-label={t("pdf.fit")}
-            onClick={() => setZoomKeeping(1)}
+            className={`pdf__fit ${zoom.mode === "fit" ? "is-on" : ""}`}
+            aria-pressed={zoom.mode === "fit"}
+            onClick={() => setZoom({ mode: "fit" })}
           >
-            <Maximize2 size={16} />
+            <MoveHorizontal size={15} aria-hidden /> {t("pdf.fit")}
           </button>
         </div>
       </header>
       {error && <p className="banner banner--error pdf__error">{error}</p>}
       <div className="pdf__scroll" ref={setScroller}>
         {doc && baseSize ? (
-          <div className="pdf__pages" style={{ gap: PAGE_GAP }}>
+          <div className="pdf__pages" style={{ gap: PAGE_GAP, "--s": scale } as CSSProperties}>
             {Array.from({ length: doc.numPages }, (_, index) => index + 1).map((pageNumber) => (
               <PdfPage
                 key={pageNumber}
                 doc={doc}
                 pageNumber={pageNumber}
                 baseSize={baseSize}
-                scale={scale}
+                renderScale={renderScale}
                 type={pageTypes.get(pageNumber)}
                 items={byPage.get(pageNumber) ?? []}
                 results={results}

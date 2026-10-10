@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Search, X } from "lucide-react";
 import type { Item, PageType, PositionResult, Product, ProductivityRule, ProjectParameters } from "../api/types";
 import type { ItemState } from "../lib/flags";
 import { formatChf, formatNumber } from "../lib/format";
 import { itemName, posNumber } from "../lib/items";
 import { useI18n } from "../i18n";
-import { ItemDetail, type ItemPatch } from "./ItemDetail";
+import { ItemCard, type ItemCardHandle, type ItemPatch } from "./ItemCard";
 
 type Filter = "all" | "open" | "check" | "priced";
 
@@ -35,6 +35,7 @@ export function ItemList({
   onSelect,
   onShowInPdf,
   onSave,
+  headerAction,
 }: {
   items: Item[];
   results: Map<string, PositionResult>;
@@ -48,11 +49,15 @@ export function ItemList({
   onSelect: (lvId: string | null, source: SelectSource) => void;
   onShowInPdf: (lvId: string) => void;
   onSave: (lvId: string, patch: ItemPatch) => Promise<void>;
+  /** Extra control in the list header (e.g. the panel collapse button). */
+  headerAction?: ReactNode;
 }) {
   const { t } = useI18n();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const rowRefs = useRef<Map<string, HTMLLIElement>>(new Map());
+  const cardRef = useRef<ItemCardHandle | null>(null);
+  const ruleList = useMemo(() => [...rules.values()], [rules]);
 
   const counts = useMemo(() => {
     const out: Record<Filter, number> = { all: 0, open: 0, check: 0, priced: 0 };
@@ -93,7 +98,13 @@ export function ItemList({
     if (!selectedId) return;
     const row = rowRefs.current.get(selectedId);
     row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // Keyboard focus follows the card (see `close` for the way back), so
+    // J/K/Esc keep working without the mouse — unless focus is elsewhere.
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === document.body || active.closest(".items")) cardRef.current?.focus();
   }, [selectedId]);
+
+  const selectedIndex = visible.findIndex((item) => item.lv_id === selectedId);
 
   const move = (direction: 1 | -1) => {
     if (visible.length === 0) return;
@@ -105,23 +116,34 @@ export function ItemList({
     onSelect(next.lv_id, "list");
   };
 
+  const close = () => {
+    if (!selectedId) return;
+    const row = rowRefs.current.get(selectedId);
+    onSelect(null, "list");
+    requestAnimationFrame(() => row?.querySelector<HTMLButtonElement>(".row__main")?.focus());
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("input, textarea, select, .detail")) return;
-    if (event.key === "ArrowDown" || event.key === "j") {
+    if (target.closest("input, textarea, select, .picker")) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (key === "j" || (key === "ArrowDown" && !selectedId)) {
       event.preventDefault();
       move(1);
-    } else if (event.key === "ArrowUp" || event.key === "k") {
+    } else if (key === "k" || (key === "ArrowUp" && !selectedId)) {
       event.preventDefault();
       move(-1);
-    } else if (event.key === "Escape") {
-      onSelect(null, "list");
+    } else if (key === "Escape" && selectedId) {
+      event.preventDefault();
+      close();
     }
   };
 
   return (
-    <div className="items" onKeyDown={onKeyDown}>
+    <div className={`items ${selectedId ? "has-focus" : ""}`} onKeyDown={onKeyDown}>
       <div className="items__head">
+        <div className="items__toolbar">
         <label className="search">
           <Search size={16} aria-hidden />
           <input
@@ -136,6 +158,8 @@ export function ItemList({
             </button>
           )}
         </label>
+        {headerAction}
+        </div>
         <div className="filters" role="tablist" aria-label={t("items.filterAria")}>
           {FILTERS.map((key) => (
             <button
@@ -184,11 +208,12 @@ export function ItemList({
                     }}
                     className={`row ${selected ? "is-selected" : ""}`}
                   >
+                    {!selected && (
                     <button
                       type="button"
                       className="row__main"
-                      aria-expanded={selected}
-                      onClick={() => onSelect(selected ? null : item.lv_id, "list")}
+                      aria-expanded={false}
+                      onClick={() => onSelect(item.lv_id, "list")}
                     >
                       <span className={`dot dot--${state}`} title={t(`items.state.${state}`)} />
                       <span className="row__name">{itemName(item) ?? t("items.noDescription")}</span>
@@ -206,16 +231,24 @@ export function ItemList({
                         {cost != null ? formatChf(cost) : "—"}
                       </span>
                     </button>
+                    )}
                     {selected && (
-                      <ItemDetail
+                      <ItemCard
+                        ref={cardRef}
                         item={item}
                         result={result}
                         state={state}
                         product={item.match ? productsById.get(item.match.product_id) : undefined}
                         products={products}
                         rule={item.match?.install_code ? rules.get(item.match.install_code) : undefined}
+                        rules={ruleList}
                         pageType={item.source_page ? types.get(item.source_page) : undefined}
                         parameters={parameters}
+                        hasPrev={selectedIndex > 0}
+                        hasNext={selectedIndex >= 0 && selectedIndex < visible.length - 1}
+                        onPrev={() => move(-1)}
+                        onNext={() => move(1)}
+                        onClose={close}
                         onShowInPdf={() => onShowInPdf(item.lv_id)}
                         onSave={(patch) => onSave(item.lv_id, patch)}
                       />

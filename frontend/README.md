@@ -38,16 +38,30 @@ single port.
   its page type's colour and a legend appears; quantity-table pages pulse while
   their positions are extracted. When the run is done the tape flies into the
   next screen and becomes its page rail — no button to press.
-- **Items** (`/bandi/:id`) — three columns: a compact list of every item (name,
-  quantity, direct cost, grouped by system; filters *No price / To check /
-  Priced*), the **page rail** (one cell per page coloured by type; it marks the
-  page in view and the selected item's page, click or drag to move, the palette
-  button opens the colour legend), and the PDF with the name and price boxes of
-  every item and a coloured page-type marker on every page. Selecting an item in
-  the list or a box in the PDF highlights it on the other side and opens how it
-  was mapped: *1 read in the tender → 2 catalogue product (with confidence) → 3
-  price*. Unmapped items can be mapped by hand from a searchable catalogue
-  picker, or priced with a hand-typed unit price; the quantity can be corrected.
+- **Items** (`/bandi/:id`) — a resizable split (`react-resizable-panels`): a
+  compact list of every item (name, quantity, direct cost, grouped by system;
+  filters *No price / To check / Priced*) on the left; on the right the **page
+  rail** (one cell per page coloured by type; it marks the page in view and the
+  selected item's page, click or drag to move, the palette button opens the
+  colour legend) and the PDF with the name and price boxes of every item and a
+  coloured page-type marker on every page.
+  - *Split*: the grip on the rail's left edge resizes (list ≥ 320px, document
+    ≥ 400px; arrows 16px, Shift+arrows 64px, Enter collapses the list,
+    double-click resets). Each side can take the full width. The ratio is saved
+    per browser.
+  - *Document*: fit width by default, recomputed on resize; a manual zoom leaves
+    fit width until it is chosen again. While resizing, pages are resized by CSS
+    and their canvases re-rendered only once the size settles; the reading
+    position (page and offset) is kept.
+  - *Item card*: selecting an item in the list or a box in the PDF opens it in
+    focus mode (the other rows dim; J/K or ‹ › move, Esc closes). A sticky
+    header shows name, LV code, page, quantity (editable), status and direct
+    cost, the cost formula with backend values only (`qty × (net cost + waste +
+    hours × factors × rate) = direct cost`, missing parts as dashes) and the
+    pricing chain *Tender text → Product → Labour → Price*, with one **Next
+    step** button for the first missing link: add the quantity, pick a
+    catalogue product, pick the labour operation, or type a price. The list
+    switches to a compact layout below ~420px (container query).
 - **Parameters** (`/bandi/:id/parameters`) — every pricing parameter in
   collapsible groups with − / + steppers; each change re-prices the tender.
 - **Price & bid** (`/bandi/:id/price`) — the offer for the chosen bid scenario,
@@ -74,13 +88,13 @@ typecheck`. Numbers, CHF amounts and dates follow the active locale.
 src/
   api/          typed contract client + types (this side of the seam)
   components/   Layout, TenderHeader, ProcessingStage (page tape), TapeMorph
-                (tape → rail hand-over), PageRail, PdfViewer, ItemList,
-                ItemDetail (mapping + hand fixes), AnimatedChf
+                (tape → rail hand-over), SplitLayout, PageRail, PdfViewer,
+                ItemList, ItemCard (pricing chain + hand fixes), AnimatedChf
   pages/        UploadPage, TenderPage (phases + tabs), ReviewPage,
                 ParametersPage, PricePage
   i18n/         locale bundles (en, de-CH, fr-CH, it-CH) + provider/hook
-  lib/          locale-aware formatting, item states, page-type colours,
-                parameter groups
+  lib/          locale-aware formatting, item states, pricing chain,
+                page-type colours, parameter groups
   styles.css    the design system (high contrast, readable, no framework)
 ```
 
