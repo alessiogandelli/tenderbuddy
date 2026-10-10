@@ -1,14 +1,14 @@
-# 11: Match → Catalogo + routing a preventivo fornitore
+# 11: Match → Catalogue + routing to supplier quote
 
-**What to build:** gli Item estratti si agganciano al Catalogo: Prodotto, Install Code, confidenza e sorgente del prezzo. Chi non trova corrispondenza esce `no_match` e si vede; chi è un Pacchetto fornitore esce `supplier_quote_required` e non riceve un prezzo inventato. Sul Bando completo il risultato è onesto: la quota prezzata è coperta, il resto è segnalato.
+**What to build:** the extracted items attach to the catalogue: product, install code, confidence and price source. Those that find no match come out `no_match` and are visible; those that are a supplier package come out `supplier_quote_required` and do not receive an invented price. On the full tender the result is honest: the priced share is covered, the rest is flagged.
 
 **Blocked by:** 05, 09
 
 **Status:** ready-for-agent
 
-- [ ] Ogni Item matchato espone Prodotto, Install Code, confidenza e sorgente del prezzo
-- [ ] Un Item senza corrispondenza esce con Stato di mancato match, segnalato
-- [ ] Un Pacchetto fornitore esce `supplier_quote_required`, senza prezzo inventato
-- [ ] Il Match è rivedibile e sostituibile dall'utente
-- [ ] Il Match usa gli attributi dell'Item (dimensione, tipo, classe di resistenza al fuoco), non la semplice corrispondenza di stringa
-- [ ] Test sul comportamento esterno: sul Bando completo il Match copre una quota significativa degli Item e il resto è segnalato onestamente
+- [ ] Every matched item exposes product, install code, confidence and price source
+- [ ] An item with no match comes out with a no-match status, flagged
+- [ ] A supplier package comes out `supplier_quote_required`, without an invented price
+- [ ] The match is reviewable and replaceable by the user
+- [ ] The match uses the item's attributes (size, type, fire resistance class), not simple string matching
+- [ ] Test on external behaviour: on the full tender the match covers a significant share of the items and the rest is flagged honestly

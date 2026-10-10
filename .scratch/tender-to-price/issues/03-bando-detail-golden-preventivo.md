@@ -1,14 +1,14 @@
-# 03: Dettaglio Bando → Preventivo (golden al centesimo)
+# 03: Tender detail → Quote (golden to the cent)
 
-**What to build:** apro un Bando e vedo gli Item in tabella con descrizione, quantità, unità, Prodotto agganciato e Pagina sorgente; per ciascuno costo materiale, costo manodopera e costo diretto; la sintesi del progetto con Cost Baseline; il Prezzo indicativo con il Margine; e le tre card della Fascia di offerta. Un test golden garantisce che i 22 verificati riproducano l'output atteso esattamente.
+**What to build:** I open a tender and see the items in a table with description, quantity, unit, matched product and source page; for each one material cost, labour cost and direct cost; the project summary with cost baseline; the indicative price with the margin; and the three bid range cards. A golden test guarantees that the 22 verified positions reproduce the expected output exactly.
 
 **Blocked by:** 02
 
 **Status:** ready-for-agent
 
-- [ ] Tabella Item con descrizione, quantità, unità, Prodotto agganciato e Pagina sorgente
-- [ ] Per ogni Item: costo materiale, costo manodopera, costo diretto
-- [ ] Sintesi del progetto e Cost Baseline calcolati secondo i numeri golden, esclusi i costi di progetto che il README inserisce ma che la ground truth non include
-- [ ] Prezzo indicativo con il Margine
-- [ ] Tre card della Fascia di offerta (Aggressive, Target, Conservative) con prezzo, margine, probabilità stimata di aggiudicazione e contributo atteso
-- [ ] Test golden: i 22 verificati riproducono l'output atteso al centesimo, con la win-probability non arrotondata nel contributo atteso
+- [ ] Item table with description, quantity, unit, matched product and source page
+- [ ] For each item: material cost, labour cost, direct cost
+- [ ] Project summary and cost baseline calculated according to the golden numbers, excluding the project costs that the README includes but that the ground truth does not
+- [ ] Indicative price with the margin
+- [ ] Three bid range cards (Aggressive, Target, Conservative) with price, margin, estimated win probability and expected contribution
+- [ ] Golden test: the 22 verified positions reproduce the expected output to the cent, with the win probability unrounded in the expected contribution

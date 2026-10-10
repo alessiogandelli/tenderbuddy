@@ -33,10 +33,59 @@ Two runnable trees, decoupled by a frozen JSON contract
 | [`backend/`](backend/README.md) | Python 3.12 · FastAPI | Reads the PDF, extracts/matches/ prices, serves the API. Owns all pricing math. |
 | [`frontend/`](frontend/README.md) | React · TypeScript · Vite | The webapp. Talks to the backend only through the contract; never computes prices. |
 
-The pipeline is `Read → Parse → Classify → Canonicalize → Match → Price →
-Aggregate`. Each step is independently replaceable; the AI extractor/matcher sit
-behind the same interfaces and fall back to the deterministic engine when no
-`OPENAI_API_KEY` is configured.
+## How it works — the pipeline
+
+The backend runs a fixed sequence of independently replaceable steps. Each one
+takes the document state, enriches it and passes it on; only the resulting
+`Bando` JSON is observable from outside (the one test seam). The AI engines sit
+**behind** the Parse and Match steps, and every step degrades gracefully to
+deterministic code when `OPENAI_API_KEY` is absent or a call fails — the pipeline
+never blocks on the model.
+
+`Read → Classify pages → Parse → Overview → Classify → Canonicalize → Match →
+Price → Aggregate`
+
+| # | Step | What it does | Fallback when AI is off/fails |
+|---|---|---|---|
+| 1 | `read` | Reads the PDF into per-page text, with geometry (bboxes) via PyMuPDF; text-only via pypdf. | pypdf text |
+| 2 | `classify_pages` | Labels **every page** before extraction (`cover`, `index`, `legal`, `specifications`, `modulo_offerta`, `preziario`, `lv_table`, …) so only the six-column LV tables are read. | header heuristic (`Gegenstand` + `Mass-`) |
+| 3 | `parse` | Extracts priceable positions from the `lv_table` pages. A vision model returns each row's description, quantity, unit and the `name_bbox`/`price_bbox` regions. | text-AI extraction, then the deterministic parser |
+| 4 | `overview` | Builds a whole-document overview (systems, materials and labour needed); also fed to the matcher as context. | derived from the extracted Items |
+| 5 | `classify` | Detects the title, description and classification (`ventilation`, `hvac`, …) for the archive. | heuristics on the document |
+| 6 | `canonicalize` | Normalises descriptions, units and attributes (e.g. `Stk` → `pc`, `DN100`). | same code |
+| 7 | `match` | Assigns each Item to a catalogue Product + Install Code with a confidence, or flags it (`no_match`, `low_confidence_match`). | deterministic matcher |
+| 8 | `price` | Material cost (× waste), labour hours (× productivity factors × rate) and direct cost per Item. **The golden math, reproduced to the cent.** | one implementation |
+| 9 | `aggregate` | Cost Baseline, indicative price and the Aggressive / Target / Conservative bid range with win probabilities. | one implementation |
+
+Two optional **deep** passes (`--deep` / "Rilancia profonda") raise quality at
+extra cost: a model-written whole-document overview and a selective escalation
+of uncertain matches to a larger reasoning model.
+
+### The two AI engines
+
+- **Extraction** (step 3) — the Responses API with a strict JSON schema. The
+  model receives one rendered page image at a time and returns structured rows
+  plus boxes. It is *copying* fields from a layout, so `reasoning: none` is both
+  more accurate and faster than `low` (see [`docs/benchmark.md`](docs/benchmark.md)).
+- **Matching** (step 7) — a candidate product set is pre-filtered from the
+  catalogue, then the model *decides* among the candidates (the Decisions API).
+  This is where reasoning helps, so escalation to a bigger model lives here.
+
+### Traceability and uncertainty
+
+Every Item keeps the region of the page it came from (`name_bbox`) and the
+rightmost `Betrag` cell where the price will be written (`price_bbox`). Clicking
+a row in the workbench scrolls the PDF to that exact region and pulses the box,
+and clicking a box selects the row. Anything the engine could not understand
+becomes a **flag** on the Item, never a silent drop: flagged items surface under
+"Da rivedere" with a reason and their source page.
+
+### Live re-pricing
+
+After any write — re-running the pipeline, editing an Item, or changing the
+project Parameters — the backend **recomputes** the position results, summary and
+bid range and returns the updated `Bando`. The frontend never computes a price;
+it only displays what the backend returns.
 
 ## Quickstart
 

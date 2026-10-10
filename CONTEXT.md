@@ -1,135 +1,135 @@
 # From Tender to First Price
 
-Trasforma un **Bando** (documento di gara) in un **Preventivo** leggibile e difendibile: si carica il PDF, il motore estrae gli item, li aggancia ai dati di prezzatura e produce costi, prezzo indicativo e fascia di offerta, segnalando esplicitamente tutto ciò che non è stato capito.
+Turn a **Bando** (a tender document) into a readable, defensible **Preventivo** (quote): the PDF is uploaded, the engine extracts the items, links them to pricing data and produces costs, an indicative price and a bid range — explicitly flagging everything it did not understand.
 
 ## Language
 
-### Documento
+### Document
 
 **Bando**:
-Un documento di gara pubblicato da un committente, unità di lavoro dell'app: ha titolo, descrizione, classificazione e un proprio Preventivo.
-_Avoid_: pratica, progetto, richiesta
+A tender document published by a client, the app's unit of work: it has a title, a description, a classification and its own Preventivo.
+_Avoid_: practice, project, request
 
-**Titolo**:
-Il nome in una riga con cui il Bando si riconosce a colpo d'occhio nell'archivio.
-_Avoid_: nome, label, intestazione
+**Title**:
+The one-line name by which the Bando is recognised at a glance in the archive.
+_Avoid_: name, label, heading
 
-**Descrizione**:
-Il riassunto breve di cosa tratta il Bando, ad esempio "Sistema di ventilazione".
-_Avoid_: abstract, nota, sommario
+**Description**:
+The short summary of what the Bando is about, e.g. "Ventilation system".
+_Avoid_: abstract, note, summary
 
-**Classificazione**:
-Il tipo/ambito rilevato per il Bando, che seleziona il Profilo di prezzatura.
-_Avoid_: categoria, tag, dominio
+**Classification**:
+The type/domain detected for the Bando, which selects the pricing Profile.
+_Avoid_: category, tag, domain
 
-**Pagina sorgente**:
-La pagina del PDF del Bando da cui un Item è stato estratto.
-_Avoid_: riferimento, ref, fonte
+**Source page**:
+The page of the Bando PDF from which an Item was extracted.
+_Avoid_: reference, ref, source
 
-**Tracciabilità**:
-Il legame fra un numero del Preventivo e la regione esatta del PDF da cui proviene.
-_Avoid_: audit trail, provenienza
+**Traceability**:
+The link between a number in the Preventivo and the exact region of the PDF it came from.
+_Avoid_: audit trail, provenance
 
-### Estrazione
+### Extraction
 
 **Item**:
-Un'unità prezzabile estratta dal Bando, o creata a mano: descrizione, quantità, unità, attributi.
-_Avoid_: riga, entry, record
+A priceable unit extracted from the Bando, or created by hand: description, quantity, unit, attributes.
+_Avoid_: row, entry, record
 
-**Unità**:
-La misura di un Item, normalizzata (`pc`, `m`, `m2`, `h`, `LS`, `system`).
-_Avoid_: UoM, misura, unit of measure
+**Unit**:
+The measure of an Item, normalised (`pc`, `m`, `m2`, `h`, `LS`, `system`).
+_Avoid_: UoM, measure, unit of measure
 
-**Attributo**:
-Una caratteristica tecnica usata per il Match (dimensione, DN, classe di resistenza al fuoco).
-_Avoid_: proprietà, feature, campo
+**Attribute**:
+A technical characteristic used for matching (size, DN, fire-resistance class).
+_Avoid_: property, feature, field
 
-**Flag di incertezza**:
-Il marcatore che registra ciò che non è stato capito o che manca in un Item.
-_Avoid_: warning, alert, errore
+**Uncertainty flag**:
+The marker that records what was not understood or is missing in an Item.
+_Avoid_: warning, alert, error
 
-**Stato**:
-La condizione di revisione/prezzatura di un Item (`calculated`, `supplier_quote_required`, `assumption_applied`, `review_required`, `insufficient_information`, `out_of_scope`, `non_priceable`).
-_Avoid_: status del record, fase
+**Status**:
+The review/pricing condition of an Item (`calculated`, `supplier_quote_required`, `assumption_applied`, `review_required`, `insufficient_information`, `out_of_scope`, `non_priceable`).
+_Avoid_: record status, phase
 
-**Copertura**:
-Quanta parte del Bando è prezzata rispetto a quanto resta da sistemare.
-_Avoid_: completamento, percentuale di avanzamento
+**Coverage**:
+How much of the Bando is priced compared with what is left to fix.
+_Avoid_: completion, progress percentage
 
-### Dati di prezzatura
+### Pricing data
 
-**Catalogo**:
-L'elenco curato di Prodotti e Pacchetti fornitore contro cui si prezza.
-_Avoid_: listino, anagrafica, magazzino
+**Catalogue**:
+The curated list of Products and supplier Packages against which pricing is done.
+_Avoid_: price list, master data, warehouse
 
-**Prodotto**:
-Una voce di Catalogo con costo netto e Install Code.
-_Avoid_: articolo, componente, articolo di listino
+**Product**:
+A Catalogue entry with a net cost and an Install Code.
+_Avoid_: article, component, price-list article
 
-**Pacchetto fornitore**:
-Una voce di Catalogo che non possiamo prezzare e che richiede un preventivo del fornitore.
-_Avoid_: voce da quotare, esterno
+**Supplier package**:
+A Catalogue entry we cannot price and that requires a supplier quote.
+_Avoid_: item to quote, external
 
 **Match**:
-L'assegnazione di un Item a un Prodotto, con una confidenza.
-_Avoid_: associazione, mapping, corrispondenza
+The assignment of an Item to a Product, with a confidence.
+_Avoid_: association, mapping, correspondence
 
 **Install Code**:
-La chiave che lega un Item alla relativa Regola di produttività.
-_Avoid_: codice lavoro, work type
+The key that links an Item to its Productivity Rule.
+_Avoid_: work code, work type
 
-**Regola di produttività**:
-Le ore base per unità e il ruolo di manodopera per un Install Code.
-_Avoid_: tabella ore, tariffa oraria
+**Productivity rule**:
+The base hours per unit and the labour role for an Install Code.
+_Avoid_: hours table, hourly rate
 
-**Parametri di progetto**:
-I fattori, le maggiorazioni e le condizioni commerciali specifici del progetto.
-_Avoid_: config, settings, parametri globali
+**Project parameters**:
+The factors, markups and commercial conditions specific to the project.
+_Avoid_: config, settings, global parameters
 
-**Profilo di prezzatura**:
-L'insieme di Catalogo, Regole di produttività e Parametri di progetto applicato a un Bando.
-_Avoid_: dataset, bundle, configurazione di pricing
+**Pricing profile**:
+The set of Catalogue, Productivity rules and Project parameters applied to a Bando.
+_Avoid_: dataset, bundle, pricing configuration
 
-### Prezzo
+### Price
 
-**Costo materiale**:
-Il costo dei materiali di un Item, maggiorato della percentuale di scarto.
-_Avoid_: costo articoli
+**Material cost**:
+The material cost of an Item, marked up by the waste percentage.
+_Avoid_: article cost
 
-**Costo manodopera**:
-Il costo dell'installazione di un Item, ore regolate per tariffa.
-_Avoid_: costo ore, costo posa
+**Labour cost**:
+The installation cost of an Item, hours adjusted by rate.
+_Avoid_: hour cost, installation cost
 
-**Costo diretto**:
-La somma di costo materiale e costo manodopera di un Item o del Bando.
-_Avoid_: costo di cantiere, break-even
+**Direct cost**:
+The sum of material cost and labour cost of an Item or of the Bando.
+_Avoid_: site cost, break-even
 
 **Cost Baseline**:
-La base di costo del Bando: costo diretto maggiorato di overhead e trasporto/equipaggiamento. È la base da cui si calcola la fascia di offerta.
-_Avoid_: costo base, break-even, costo di progetto
+The cost base of the Bando: direct cost marked up by overhead and transport/equipment. It is the base from which the bid range is computed.
+_Avoid_: base cost, break-even, project cost
 
-**Margine**:
-La percentuale di margine target usata per determinare il prezzo di vendita.
-_Avoid_: ricarico (è markup, concetto diverso), utile
+**Margin**:
+The target margin percentage used to determine the selling price.
+_Avoid_: markup (a different concept), profit
 
-**Prezzo indicativo**:
-Il prezzo di vendita calcolato dal Cost Baseline e dal Margine.
-_Avoid_: prezzo finale, quotazione
+**Indicative price**:
+The selling price computed from the Cost Baseline and the Margin.
+_Avoid_: final price, quotation
 
-**Fascia di offerta**:
-I tre Scenari (Aggressive, Target, Conservative) con prezzo, margine, probabilità stimata di aggiudicazione e contributo atteso.
-_Avoid_: range prezzi, bracket
+**Bid range**:
+The three Scenarios (Aggressive, Target, Conservative) with price, margin, estimated win probability and expected contribution.
+_Avoid_: price range, bracket
 
 **Scenario**:
-Una delle tre ipotesi di offerta che combina margine e probabilità di aggiudicazione.
-_Avoid_: opzione, alternativa
+One of the three bid hypotheses combining margin and win probability.
+_Avoid_: option, alternative
 
 **Preventivo**:
-Il risultato prezzato di un Bando: item prezzati, sintesi, prezzo indicativo e Fascia di offerta.
-_Avoid_: offerta, quotazione, proposal
+The priced result of a Bando: priced items, summary, indicative price and Bid range.
+_Avoid_: offer, quotation, proposal
 
-### Prodotto software
+### Software product
 
-**Motore di estrazione**:
-Il componente che legge il PDF e produce Item; dietro interfaccia, con implementazioni intercambiabili.
-_Avoid_: parser, reader, engine di lettura
+**Extraction engine**:
+The component that reads the PDF and produces Items; behind an interface, with interchangeable implementations.
+_Avoid_: parser, reader, reading engine

@@ -1,13 +1,13 @@
-# 02: Archivio Bando con il Bando seedato dai dati forniti
+# 02: Tender archive with the tender seeded from the provided data
 
-**What to build:** i Bando hanno una casa: un indice e un JSON per Bando. La webapp mostra l'archivio con Titolo, Descrizione, data e Copertura, partendo dal Bando seedato a partire dai dati di esempio forniti. Un Bando si riapre dall'archivio e si ritrova come era.
+**What to build:** tenders have a home: an index and one JSON per tender. The webapp shows the archive with title, description, date and coverage, starting from the tender seeded from the provided example data. A tender is reopened from the archive and found as it was.
 
 **Blocked by:** 01
 
 **Status:** ready-for-agent
 
-- [ ] I Bando creati persistono fra un riavvio e l'altro
-- [ ] L'archivio elenca i bandi con Titolo, Descrizione, data e Copertura
-- [ ] Il Bando seedato dai dati forniti compare in archivio con dati coerenti
-- [ ] Aprire un Bando dall'archivio porta al suo dettaglio
-- [ ] Le API di elenco e lettura Bando sono coperte da test sul comportamento esterno
+- [ ] Created tenders persist across a restart
+- [ ] The archive lists the tenders with title, description, date and coverage
+- [ ] The tender seeded from the provided data appears in the archive with coherent data
+- [ ] Opening a tender from the archive leads to its detail
+- [ ] The tender list and read APIs are covered by tests on external behaviour

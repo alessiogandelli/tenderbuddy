@@ -1,14 +1,14 @@
-# 08: Upload + pipeline a step + Read
+# 08: Upload + step pipeline + Read
 
-**What to build:** carico il PDF di un Bando e nasce una voce in archivio. La pipeline gira step per step con lo stato visibile, così si vede che il processo è vivo e dove è arrivato. Il primo step legge il documento e ne estrae il testo per pagina, tramite un Motore di estrazione intercambiabile.
+**What to build:** I upload the PDF of a tender and an entry is created in the archive. The pipeline runs step by step with visible status, so you can see that the process is alive and where it has got to. The first step reads the document and extracts the text per page, through an interchangeable extraction engine.
 
 **Blocked by:** 02
 
 **Status:** ready-for-agent
 
-- [ ] Upload di un PDF con creazione di un Bando in archivio
-- [ ] La pipeline gira step per step con stato visibile nella webapp
-- [ ] Il Read estrae il testo per pagina
-- [ ] Il Motore di estrazione è dietro interfaccia, con almeno due implementazioni sostituibili
-- [ ] Sostituire il Motore non tocca né il pricing né l'interfaccia
-- [ ] Test sul comportamento esterno: l'upload porta a un Bando con stato di pipeline e testo per pagina
+- [ ] Upload of a PDF with creation of a tender in the archive
+- [ ] The pipeline runs step by step with status visible in the webapp
+- [ ] The Read extracts the text per page
+- [ ] The extraction engine is behind an interface, with at least two swappable implementations
+- [ ] Replacing the engine touches neither the pricing nor the interface
+- [ ] Test on external behaviour: the upload leads to a tender with pipeline status and text per page

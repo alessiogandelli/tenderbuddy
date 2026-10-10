@@ -1,14 +1,14 @@
-# 12: Export del preventivo + polish UX + stati vuoti ed errore
+# 12: Quote export + UX polish + empty and error states
 
-**What to build:** esporto l'offerta prezzata e la condivido. L'interfaccia è guidata, ad alto contrasto e leggibile senza formazione: gli stati vuoti ed errore dicono cosa fare al passo successivo, ogni modifica ricalcola subito, e niente gergo tecnico resta non spiegato. Questa è la fetta che rende l'app adottabile da chi non è un esperto.
+**What to build:** I export the priced offer and share it. The interface is guided, high-contrast and readable without training: empty and error states say what to do next, every change recalculates immediately, and no technical jargon is left unexplained. This is the slice that makes the app adoptable by those who are not experts.
 
 **Blocked by:** 03, 04
 
 **Status:** ready-for-agent
 
-- [ ] Export del preventivo prezzato in un formato condivisibile
-- [ ] Flusso guidato dalla caricamento del documento al preventivo
-- [ ] Stati vuoti ed errore che indicano la prossima azione
-- [ ] Ricalcolo live su ogni modifica di un Item o di un Prodotto
-- [ ] Alto contrasto, tipografia leggibile, nessun gergo non spiegato
-- [ ] Verifica di usabilità: una persona non tecnica completa il percorso senza assistenza
+- [ ] Export of the priced quote in a shareable format
+- [ ] Guided flow from document upload to quote
+- [ ] Empty and error states that indicate the next action
+- [ ] Live recalculation on every change to an item or a product
+- [ ] High contrast, readable typography, no unexplained jargon
+- [ ] Usability check: a non-technical person completes the path without assistance

@@ -1,57 +1,57 @@
-# Benchmark e risultati — Tender → Preventivo
+# Benchmark and results — Tender → Quote
 
-Tutto ciò che abbiamo scoperto portando la pipeline da "estrazione rotta" a
-"preventivo affidabile e multilingua", con i numeri che hanno deciso le scelte.
-Ground truth: le **22 posizioni verificate** in `data/example_lv_positions.csv`.
-Harness: `backend/app/eval.py` (`bando-eval`), riproducibile con i comandi in
-fondo.
+Everything we discovered while taking the pipeline from "broken extraction" to
+"reliable, multilingual quoting", with the numbers that decided the choices.
+Ground truth: the **22 verified positions** in `data/example_lv_positions.csv`.
+Harness: `backend/app/eval.py` (`bando-eval`), reproducible with the commands at
+the bottom.
 
 ---
 
 ## TL;DR
 
-| Configurazione | Item | Recall | Prodotto | Install code | Tempo | Costo | p50 / p95 |
+| Configuration | Item | Recall | Product | Install code | Time | Cost | p50 / p95 |
 |---|---|---|---|---|---|---|---|
-| Deterministico (offline) | 269 | **22/22** | 32% | 59% | 1 s | $0 | — |
+| Deterministic (offline) | 269 | **22/22** | 32% | 59% | 1 s | $0 | — |
 | **Luna `none`** ← default | 247 | **22/22** | **73%** | 77% | **42 s** | **$0.049** | 1.4 / 4.2 s |
 | Luna `none` + escalation | 255 | 22/22 | **77%** | **82%** | 68 s | $0.570 | 1.9 / 5.4 s |
 | Luna `low` | 284 | 22/22 | 64% | 73% | 74 s | $0.064 | 4.0 / 7.4 s |
 | Sol `low` | 267 | 22/22 | 59% | 68% | 76 s | $0.564 | 3.6 / 8.9 s |
 | Astra `low` | 272 | 22/22 | 64% | 73% | 100 s | $2.764 | 4.5 / 12.6 s |
-| Luna `none` — capitolato IT | 291 | n/a | n/a | n/a | 38 s | $0.053 | 1.0 / 3.0 s |
+| Luna `none` — IT tender document | 291 | n/a | n/a | n/a | 38 s | $0.053 | 1.0 / 3.0 s |
 
-Quattro conclusioni:
+Four conclusions:
 
-1. **Il recall è risolto dal parser deterministico**, senza AI: da 0/22 a 22/22.
-   Il problema non era "l'AI manca", era il parsing del layout.
-2. **`reasoning: none` batte `low`** in accuratezza *e* latenza: il ragionamento
-   peggiora la copia di campi strutturati.
-3. **I modelli più grandi e più cari sono dominati.** Sulla stessa pipeline, Sol
-   `low` (59%) e Astra `low` (64%) fanno **peggio** di Luna `none` (73%), a 11× e
-   56× il costo. Più capacità non significa estrazione strutturata migliore.
-4. **Luna `none` è il punto di ottimo**: il modello più economico
-   nell'impostazione più economica vince su ogni asse.
+1. **Recall is solved by the deterministic parser**, without AI: from 0/22 to 22/22.
+   The problem was not "the AI is missing", it was the layout parsing.
+2. **`reasoning: none` beats `low`** in accuracy *and* latency: reasoning
+   makes copying structured fields worse.
+3. **The larger, more expensive models are dominated.** On the same pipeline, Sol
+   `low` (59%) and Astra `low` (64%) do **worse** than Luna `none` (73%), at 11× and
+   56× the cost. More capability does not mean better structured extraction.
+4. **Luna `none` is the sweet spot**: the cheapest model
+   in the cheapest setting wins on every axis.
 
 ---
 
-## 1. Il punto di partenza
+## 1. The starting point
 
-La pipeline c'era, era verde ai test, e sul tender reale da 202 pagine estraeva
-**0 delle 22 posizioni verificate**. I test passavano perché:
+The pipeline existed, was green in tests, and on the real 202-page tender extracted
+**0 of the 22 verified positions**. The tests passed because:
 
-- il **golden test** costruisce gli Item dal CSV con i match già dati a mano e
-  verifica solo la matematica di prezzo;
-- il test di estrazione usava un **PDF sintetico** costruito su misura per la
+- the **golden test** builds the Items from the CSV with the matches already given by hand and
+  checks only the pricing maths;
+- the extraction test used a **synthetic PDF** built to fit the
   regex;
-- il test sul tender reale controllava solo `status == "done"`.
+- the test on the real tender only checked `status == "done"`.
 
-Nessuno misurava la cosa che conta: *cosa estrae davvero dal documento vero*.
-La prima cosa costruita è stato quindi l'**harness di accuratezza**, non una
+No one measured the thing that matters: *what it actually extracts from the real document*.
+So the first thing built was the **accuracy harness**, not a
 feature.
 
-### Perché 0/22
+### Why 0/22
 
-Nel PDF reale unità e quantità stanno su **righe separate**:
+In the real PDF unit and quantity are on **separate lines**:
 
 ```
 Grösse
@@ -60,207 +60,207 @@ Stk
 5
 ```
 
-La regex (`parse.py`) cercava `Stk 5` **sulla stessa riga**. Quelle righe non
-diventavano mai Item. In più: la descrizione si accumulava per l'intera pagina
-(bug), e il testo legale veniva interpretato come posizioni.
+The regex (`parse.py`) looked for `Stk 5` **on the same line**. Those lines never
+became Items. On top of that: the description accumulated for the entire page
+(bug), and legal text was interpreted as positions.
 
 ---
 
-## 2. Metodo: come misuriamo
+## 2. Method: how we measure
 
-`app/eval.py` è l'unico strumento di verità. Fa quattro cose:
+`app/eval.py` is the only source of truth. It does four things:
 
-1. **Estrae** dal tender reale (deterministico o AI).
-2. **Appaia** ogni Item a una riga ground truth con un matching greedy
-   bipartito su *(stessa pagina, stessa unità)*, punteggio
-   `qty_match + jaccard(descrizione)`, soglia esplicita. La quantità pesa il
-   doppio perché molte posizioni differiscono solo per il diametro.
-3. **Calcola**: `item_recall`, `candidate_recall`, accuratezza per campo
-   (quantità, prodotto, install code, stato), e per la latenza `p50`/`p95`,
-   errori, retry.
-4. **Scrive** tutto in `tmp/eval_report.json`.
+1. **Extracts** from the real tender (deterministic or AI).
+2. **Matches** each Item to a ground truth row with a greedy
+   bipartite matching on *(same page, same unit)*, score
+   `qty_match + jaccard(description)`, explicit threshold. Quantity weighs
+   double because many positions differ only by diameter.
+3. **Computes**: `item_recall`, `candidate_recall`, per-field accuracy
+   (quantity, product, install code, status), and for latency `p50`/`p95`,
+   errors, retries.
+4. **Writes** everything to `tmp/eval_report.json`.
 
-Due metriche di onestà:
+Two honesty metrics:
 
-- **`candidate_recall`** — il prodotto giusto è nel set di candidati che passiamo
-  al modello? Se è basso, l'errore è del *pre-filtro*, non del modello. Portarlo a
-  **100%** (K=20 sull'intero catalogo compatibile) ha isolato la vera variabile:
-  la scelta.
-- **Le 22 righe sono un campione**, non l'elenco completo delle posizioni di
-  quelle pagine. Quindi gli item "in eccesso" sono altre posizioni reali, non
-  rumore: la precisione non è misurabile da questo dataset e non la usiamo come
+- **`candidate_recall`** — is the right product in the candidate set we pass
+  to the model? If it is low, the error is in the *pre-filter*, not the model. Taking it to
+  **100%** (K=20 on the entire compatible catalogue) isolated the real variable:
+  the choice.
+- **The 22 rows are a sample**, not the complete list of positions on
+  those pages. So the "excess" items are other real positions, not
+  noise: precision is not measurable from this dataset and we do not use it as a
   gate.
 
 ---
 
-## 3. Scoperta 1 — Il recall si risolve senza AI
+## 3. Finding 1 — Recall is solved without AI
 
-Quattro fix al parser deterministico:
+Four fixes to the deterministic parser:
 
-| Fix | Cosa | Dove |
+| Fix | What | Where |
 |---|---|---|
-| Quantità multi-riga | `Stk` \n `5` come unità + numero su righe consecutive | `steps/parse.py` |
-| Reset descrizione | un nuovo blocco inizia dopo riga vuota + riga non-size/non-label | `steps/parse.py` |
-| Filtro pagine | solo pagine con intestazione LV (`Gegenstand` + `Mass-`) | `steps/parse.py` |
-| Strip preambolo | progetto/data/intestazione di pagina non sporcano la prima posizione | `steps/parse.py` |
+| Multi-line quantity | `Stk` \n `5` as unit + number on consecutive lines | `steps/parse.py` |
+| Description reset | a new block starts after a blank line + a non-size/non-label line | `steps/parse.py` |
+| Page filter | only pages with LV header (`Gegenstand` + `Mass-`) | `steps/parse.py` |
+| Preamble strip | project/date/page header do not pollute the first position | `steps/parse.py` |
 
-**Risultato: 22/22, quantità 100%.** Costo zero, latenza 1 secondo. Ora è un gate
-(`tests/test_ground_truth.py`, `EVAL_MIN_RECALL=0.9`) che fallisce se regredisce.
+**Result: 22/22, quantity 100%.** Zero cost, 1-second latency. It is now a gate
+(`tests/test_ground_truth.py`, `EVAL_MIN_RECALL=0.9`) that fails if it regresses.
 
-Il messaggio: **l'AI non serve per il recall**, serve per il *matching* e per le
-*lingue altre*.
+The message: **AI is not needed for recall**, it is needed for *matching* and for
+*other languages*.
 
 ---
 
-## 4. Scoperta 2 — Il reasoning peggiora l'estrazione
+## 4. Finding 2 — Reasoning makes extraction worse
 
-Contro ogni intuizione, l'attività di *copiare campi da un documento* peggiora
-col ragionamento:
+Against all intuition, the activity of *copying fields from a document* gets worse
+with reasoning:
 
-| Luna | Recall | Prodotto | Install code | Tempo | Costo |
+| Luna | Recall | Product | Install code | Time | Cost |
 |---|---|---|---|---|---|
 | `effort=low` | 22/22 | 64% | 73% | 74 s | $0.064 |
 | **`effort=none`** | 22/22 | **73%** | **77%** | **42 s** | **$0.049** |
 
-Con `none` il modello è **più accurato e quasi due volte più veloce** (p50 1.4 s
-contro 4.0 s). Il reasoning spinge il modello a "interpretare" invece di
-trascrivere, e introduce latenza. Per questo il default ora è `none`.
+With `none` the model is **more accurate and nearly twice as fast** (p50 1.4 s
+versus 4.0 s). Reasoning pushes the model to "interpret" instead of
+transcribe, and introduces latency. That is why the default is now `none`.
 
 ---
 
-## 5. Scoperta 3 — I modelli più grandi sono dominati
+## 5. Finding 3 — The larger models are dominated
 
-Stessa pipeline, stesso prompt, stesso catalogo. Cambia solo il modello di
-estrazione:
+Same pipeline, same prompt, same catalogue. Only the extraction model
+changes:
 
-| Modello (effort) | Prezzo /MTok (in/out) | Recall | Prodotto | Install | Tempo | Costo | p95 |
+| Model (effort) | Price /MTok (in/out) | Recall | Product | Install | Time | Cost | p95 |
 |---|---|---|---|---|---|---|---|
 | **Luna `none`** | $0.10 / $0.50 | 22/22 | **73%** | **77%** | **42 s** | **$0.049** | 4.2 s |
 | Luna `low` | $0.10 / $0.50 | 22/22 | 64% | 73% | 74 s | $0.064 | 7.4 s |
 | Sol `low` | $2 / $10 | 22/22 | 59% | 68% | 76 s | $0.564 | 8.9 s |
 | Astra `low` | $10 / $50 | 22/22 | 64% | 73% | 100 s | $2.764 | 12.6 s |
 
-Il risultato è netto e contro-intuitivo: **i modelli più capaci e più costosi
-fanno peggio** su questo compito.
+The result is clear and counter-intuitive: **the more capable and more expensive models
+do worse** on this task.
 
-- **Sol** è il peggiore in assoluto (59% prodotto), 11× il costo di Luna `none`.
-- **Astra** pareggia Luna-`low` (64%) ma a **56×** il costo e 35% più lento; è il
-  più lento di tutti (p95 12,6 s).
-- **Luna `none`** vince su accuratezza, latenza e costo insieme.
+- **Sol** is the worst of all (59% product), 11× the cost of Luna `none`.
+- **Astra** ties Luna-`low` (64%) but at **56×** the cost and 35% slower; it is the
+  slowest of all (p95 12.6 s).
+- **Luna `none`** wins on accuracy, latency and cost together.
 
-Lettura: l'estrazione è **copiatura fedele di campi da un layout**, non
-ragionamento. I modelli più grandi "interpretano" e riassumono di più (es. Sol
-tende a normalizzare le descrizioni), il che *peggiora* la fedeltà al testo — e
-quindi l'aggancio al prodotto in catalogo. La decisione "parti con il modello
-grosso, scendi solo se non migliora" è risolta dai dati al contrario: **il
-modello grosso non migliora mai, si parte e si resta su Luna**.
+Reading: extraction is **faithful copying of fields from a layout**, not
+reasoning. The larger models "interpret" and summarise more (e.g. Sol
+tends to normalise descriptions), which *worsens* fidelity to the text — and
+therefore the anchoring to the catalogue product. The decision "start with the big model,
+scale down only if it does not improve" is settled by the data the other way round: **the
+big model never improves, you start and stay on Luna**.
 
-Solo l'escalation (sezione 6) giustifica un modello grande, perché lì il compito
-è diverso — *decidere* tra candidati ambigui, dove il ragionamento serve.
+Only escalation (section 6) justifies a large model, because there the task
+is different — *deciding* between ambiguous candidates, where reasoning helps.
 
 ---
 
-## 6. Scoperta 4 — Quanto costa il punto di accuratezza
+## 6. Finding 4 — What an accuracy point costs
 
-L'escalation manda ad Astra (effort `medium`) le posizioni che la Decisions API
-marca come incerte (nessun match, bassa confidenza, probabilità piatte):
+Escalation sends to Astra (effort `medium`) the positions that the Decisions API
+marks as uncertain (no match, low confidence, flat probabilities):
 
-| | Prodotto | Install | Tempo | Costo | Chiamate escalation |
+| | Product | Install | Time | Cost | Escalation calls |
 |---|---|---|---|---|---|
 | Luna `none` | 73% | 77% | 42 s | $0.049 | 0 |
 | Luna `none` + escalation | **77%** | **82%** | 68 s | **$0.570** | **40** |
 
-**40 posizioni escalate** comprano **+4 punti di prodotto e +5 di install code**.
-In assoluto è economico ($0.57), ma è **11,6× il costo base**. Con $75: ~1.500
-preventivi a Luna pulita, ~130 con escalation piena.
+**40 escalated positions** buy **+4 product points and +5 install code points**.
+In absolute terms it is cheap ($0.57), but it is **11.6× the base cost**. With $75: ~1,500
+clean-Luna quotes, ~130 with full escalation.
 
-Interpretazione: l'escalation è un **interruttore di qualità**, non un default.
-Se l'accuratezza di match è il collo di bottiglia (es. in demo, o se l'errore
-costa), accendila; se conta il volume, lasciala spenta. Il budget è configurabile
+Interpretation: escalation is a **quality switch**, not a default.
+If match accuracy is the bottleneck (e.g. in demo, or if the error
+is costly), turn it on; if volume matters, leave it off. The budget is configurable
 (`BANDO_ESCALATION_BUDGET`, default 20 per run).
 
 ---
 
-## 7. Scoperta 5 — Multilingua: da 0 a 291 posizioni
+## 7. Finding 5 — Multilingual: from 0 to 291 positions
 
-Il triage era **specifico al tedesco** (`Gegenstand`/`Mass-`): su un capitolato
-italiano scartava *tutte* le pagine e l'AI non vedeva nulla → **0 posizioni**.
+The triage was **German-specific** (`Gegenstand`/`Mass-`): on an Italian
+tender document it discarded *all* the pages and the AI saw nothing → **0 positions**.
 
-Fix: **triage language-agnostic** (`ai/extract.py:lv_pages`). Se trova
-l'intestazione LV tedesca su ≥10 pagine usa quella (fast-path, 121 pagine);
-altrimenti manda al modello tutte le pagine con contenuto sufficiente, e il
-modello decide pagina per pagina dove ci sono posizioni. Il prompt è stato
-generalizzato (LV / capitolato / bordereau / BoQ, unità multilingua).
+Fix: **language-agnostic triage** (`ai/extract.py:lv_pages`). If it finds
+the German LV header on ≥10 pages it uses it (fast-path, 121 pages);
+otherwise it sends the model all pages with sufficient content, and the
+model decides page by page where the positions are. The prompt was
+generalised (LV / tender document / bordereau / BoQ, multilingual units).
 
-Su un **bando italiano reale** (`26122_ca_capitolato…`, 188 pagine, restauro
-Palazzo del Pretorio, Locarno):
+On a **real Italian tender document** (`26122_ca_capitolato…`, 188 pages, restoration
+of Palazzo del Pretorio, Locarno):
 
-| | Item estratti | Tempo | Costo |
+| | Items extracted | Time | Cost |
 |---|---|---|---|
-| Deterministico (solo tedesco) | **0** | 0.4 s | $0 |
+| Deterministic (German only) | **0** | 0.4 s | $0 |
 | **Luna `none`** | **291** | 38 s | $0.053 |
 
-Le posizioni estratte sono reali — UTA con portata, canali, serrande tagliafuoco,
-regolatori di volume — non testo di capitolato. Stringere il prompt ("niente
-requisiti, criteri o prosa, solo voci con quantità e unità") ha ridotto il
-rumore da 317 a 291 item.
+The extracted positions are real — AHUs with flow rate, ducts, fire dampers,
+volume controllers — not tender document prose. Tightening the prompt ("no
+requirements, criteria or prose, only entries with quantity and unit") reduced the
+noise from 317 to 291 items.
 
-**Conclusione: il prodotto funziona in tutte le lingue con struttura standard
-(numero posizione + descrizione + quantità + unità), tramite l'AI. Il parser
-deterministico resta l'offline tedesco.**
+**Conclusion: the product works in all languages with standard structure
+(position number + description + quantity + unit), via the AI. The deterministic
+parser remains the German offline one.**
 
 ---
 
-## 8. Configurazione consigliata
+## 8. Recommended configuration
 
 ```bash
 BANDO_EXTRACT_MODEL=gpt-6-luna
-BANDO_EXTRACT_EFFORT=none      # più accurato E più veloce di "low"
+BANDO_EXTRACT_EFFORT=none      # more accurate AND faster than "low"
 BANDO_MATCH_MODEL=gpt-6-luna   # Decisions API, input-only
 BANDO_ESCALATE_MODEL=gpt-6-astra
-BANDO_ESCALATE_EFFORT=medium   # solo per i casi dubbi
+BANDO_ESCALATE_EFFORT=medium   # only for dubious cases
 BANDO_AI_CONCURRENCY=8
 BANDO_ESCALATION_BUDGET=20
 ```
 
-Con $75 di credito: **~1.500 preventivi** in configurazione base, **~130** con
-escalation piena su ogni run. Il margine è enorme.
+With $75 of credit: **~1,500 quotes** in the base configuration, **~130** with
+full escalation on every run. The margin is huge.
 
 ---
 
-## 9. Errori residui (onestà)
+## 9. Residual errors (honesty)
 
-Sulle 22 verificate, con la configurazione consigliata, i match mancati sono
-~5 (prod 77%). Cause note, non nascoste:
+On the 22 verified, with the recommended configuration, the missed matches are
+~5 (prod 77%). Known causes, not hidden:
 
-- **p.164 (`LV0013/14/15`)**: per tre varianti il modello ha estratto come
-  descrizione solo il codice modello (`TVR-D`) invece del blocco descrittivo
-  condiviso → nessun match. È un caso di *blocco descrizione molto sopra la
-  variante*, dove servirebbe un contesto più ampio nella richiesta.
-- **`LV0002` (p.78)**: `DN100` vs `DN125` confusi — near-miss sul diametro.
-- **`LV0006` (p.80)**: una riga serranda scambiata con la posizione silenziatore
-  adiacente (quantità 4 vs 6).
-- **Prosa trattata come posizione**: ridotta ma non azzerata; il modello ogni
-  tanto emette bullet di capitolato. Mitigato dal prompt, non eliminato.
+- **p.164 (`LV0013/14/15`)**: for three variants the model extracted as
+  description only the model code (`TVR-D`) instead of the shared descriptive
+  block → no match. It is a case of *description block far above the
+  variant*, where a wider context in the request would be needed.
+- **`LV0002` (p.78)**: `DN100` vs `DN125` confused — near-miss on the diameter.
+- **`LV0006` (p.80)**: a damper row swapped with the adjacent silencer
+  position (quantity 4 vs 6).
+- **Prose treated as a position**: reduced but not eliminated; the model every
+  now and then emits tender document bullets. Mitigated by the prompt, not eliminated.
 
-Nessuno di questi è silenzioso: finiscono tutti in "Da rivedere" con il flag
-`no_match` o `low_confidence_match`, con la pagina sorgente agganciata.
+None of these is silent: they all end up in "Da rivedere" with the flag
+`no_match` or `low_confidence_match`, with the source page anchored.
 
 ---
 
-## 10. Come riprodurre
+## 10. How to reproduce
 
 ```bash
 cd backend
-bando-eval                                         # deterministico (gratis)
+bando-eval                                         # deterministic (free)
 bando-eval --extract-effort none                   # Luna (default)
 bando-eval --tag sol --extract-model gpt-6.1-sol --extract-effort low
 bando-eval --tag astra --extract-model gpt-6-astra --extract-effort low
-bando-eval --tag luna-esc --extract-effort none    # con escalation
+bando-eval --tag luna-esc --extract-effort none    # with escalation
 bando-eval --tag ita --extract-effort none --pdf runtime/bandi/<id>.pdf
 ```
 
-Ogni run appende a `tmp/eval_report.json`. Il gate automatico:
+Each run appends to `tmp/eval_report.json`. The automatic gate:
 
 ```bash
 EVAL_MIN_RECALL=0.9 .venv/bin/python -m pytest tests/test_ground_truth.py
@@ -268,17 +268,17 @@ EVAL_MIN_RECALL=0.9 .venv/bin/python -m pytest tests/test_ground_truth.py
 
 ---
 
-## 11. Architettura in una riga per pezzo
+## 11. Architecture in one line per piece
 
-- **`pipeline/extractors/`** — lettura PDF (PyMuPDF + fallback pypdf), geometria.
-- **`pipeline/steps/`** — i 7 passi deterministici, incluso il parser riscritto.
-- **`pipeline/ai/`** — i motori AI intercambiabili: `extract` (Responses +
-  structured output), `match` (Decisions API), `escalate` (Astra sui dubbi),
-  `usage` (token/costo/latenza). Fallback deterministico se manca la chiave.
-- **`app/eval.py`** — l'harness che ha guidato ogni decisione.
-- **`tests/`** — golden (prezzo al centesimo), ground truth (recall ≥ 0.9),
-  adapter AI (fake client), API.
+- **`pipeline/extractors/`** — PDF reading (PyMuPDF + pypdf fallback), geometry.
+- **`pipeline/steps/`** — the 7 deterministic steps, including the rewritten parser.
+- **`pipeline/ai/`** — the interchangeable AI engines: `extract` (Responses +
+  structured output), `match` (Decisions API), `escalate` (Astra on dubious cases),
+  `usage` (token/cost/latency). Deterministic fallback if the key is missing.
+- **`app/eval.py`** — the harness that guided every decision.
+- **`tests/`** — golden (price to the cent), ground truth (recall ≥ 0.9),
+  AI adapters (fake client), API.
 
-**Niente è mockato.** La matematica di prezzo è verificata al centesimo contro
-`expected_output_example.json`; l'estrazione è misurata contro le 22 posizioni
-verificate. L'incertezza è sempre visibile, mai nascosta.
+**Nothing is mocked.** The pricing maths is verified to the cent against
+`expected_output_example.json`; extraction is measured against the 22 verified
+positions. Uncertainty is always visible, never hidden.

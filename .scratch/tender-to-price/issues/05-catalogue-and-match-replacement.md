@@ -1,14 +1,14 @@
-# 05: Catalogo consultabile + sostituzione del Match + ricalcolo live
+# 05: Browsable catalogue + match replacement + live recalculation
 
-**What to build:** una pagina dedicata al Catalogo con ricerca e filtri, per trovare il Prodotto giusto mentre si rivede un Bando. Sostituisco il Prodotto agganciato a un Item e il preventivo si ricalcola subito, restando tracciabile alla Pagina sorgente.
+**What to build:** a dedicated catalogue page with search and filters, to find the right product while reviewing a tender. I replace the product attached to an item and the quote recalculates immediately, staying traceable to the source page.
 
 **Blocked by:** 03
 
 **Status:** ready-for-agent
 
-- [ ] Pagina Catalogo con ricerca e filtri (categoria, sottocategoria, dimensione)
-- [ ] Consultabili anche le Regole di produttività e i Parametri di progetto
-- [ ] Sostituzione del Prodotto agganciato a un Item
-- [ ] Ricalcolo immediato del preventivo dopo la sostituzione
-- [ ] La Pagina sorgente resta tracciabile dopo la sostituzione
-- [ ] Test sul comportamento esterno: la sostituzione muove i numeri come atteso
+- [ ] Catalogue page with search and filters (category, subcategory, size)
+- [ ] The productivity rules and project parameters can also be consulted
+- [ ] Replacement of the product attached to an item
+- [ ] Immediate recalculation of the quote after the replacement
+- [ ] The source page stays traceable after the replacement
+- [ ] Test on external behaviour: the replacement moves the numbers as expected
