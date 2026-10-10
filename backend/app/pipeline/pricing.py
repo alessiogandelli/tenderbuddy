@@ -76,6 +76,9 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
     base.adjusted_install_hours = round(hours, 2)
     base.labour_cost_chf = round(labour, 2)
     base.direct_position_cost_chf = round(direct, 2)
+    base.base_hours_per_unit = round(float(rule.base_hours_per_unit), 4)
+    base.hourly_rate_chf = round(rate, 2)
+    base.factor_product = round(_factor_product(db, rule.factor_keys), 4)
     base.price_source = (
         PriceSource.SUPPLIER_PACKAGE
         if item.match.price_source == PriceSource.SUPPLIER_PACKAGE
@@ -88,7 +91,8 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
 def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
     material = sum(r.material_cost_chf or 0.0 for r in results)
     labour = sum(r.labour_cost_chf or 0.0 for r in results)
-    direct = material + labour
+    project = db.project_costs_chf() if db.include_project_costs else 0.0
+    direct = material + labour + project
     baseline = direct * (1.0 + db.overhead_pct / 100.0) * (1.0 + db.transport_pct / 100.0)
     indicative = baseline / (1.0 - db.target_margin_pct / 100.0)
     return Summary(
@@ -97,6 +101,8 @@ def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
         direct_cost_chf=round(direct, 2),
         cost_baseline_chf=round(baseline, 2),
         indicative_selling_price_chf=round(indicative, 2),
+        project_costs_chf=round(project, 2),
+        include_project_costs=db.include_project_costs,
     )
 
 

@@ -51,7 +51,9 @@ class PriceSource(StrEnum):
 
 class PipelineStep(StrEnum):
     READ = "read"
+    CLASSIFY_PAGES = "classify_pages"
     PARSE = "parse"
+    OVERVIEW = "overview"
     CLASSIFY = "classify"
     CANONICALIZE = "canonicalize"
     MATCH = "match"
@@ -75,10 +77,35 @@ class Classification(StrEnum):
     OTHER = "other"
 
 
+class PageType(StrEnum):
+    """What kind of page a tender page is, decided before extraction.
+
+    The categories mirror the ``docs/tenders`` analyses ("Document parts"), so
+    classification stays useful beyond the LV. We only process ``lv_table`` — the
+    six-column German form Pos. | Gegenstand | Mass-Gattg. | Mass-betrag |
+    Einheits-Preis | Betrag Fr. ``lv_other`` is an LV-like page in another layout
+    (NOVA schedules, CPN modulo offerta, supplementary rates). ``other`` is the
+    catch-all when nothing else fits.
+    """
+
+    COVER = "cover"
+    INDEX = "index"
+    CAPTIONS = "captions"
+    LEGAL = "legal"
+    SPECIFICATIONS = "specifications"
+    MODULO_OFFERTA = "modulo_offerta"
+    PREZIARIO = "preziario"
+    LV_TABLE = "lv_table"
+    LV_OTHER = "lv_other"
+    OTHER = "other"
+
+
 # Ordered pipeline steps, used by the runner and the UI.
 PIPELINE_ORDER = [
     PipelineStep.READ,
+    PipelineStep.CLASSIFY_PAGES,
     PipelineStep.PARSE,
+    PipelineStep.OVERVIEW,
     PipelineStep.CLASSIFY,
     PipelineStep.CANONICALIZE,
     PipelineStep.MATCH,
@@ -95,17 +122,27 @@ UNIT_ALIASES = {
     "stk.": Unit.PC,
     "pc": Unit.PC,
     "pce": Unit.PC,
+    "pcs": Unit.PC,
+    "pz": Unit.PC,
     "m": Unit.M,
     "lfdm": Unit.M,
     "lfm": Unit.M,
+    "ml": Unit.M,
     "m2": Unit.M2,
     "m²": Unit.M2,
+    "mq": Unit.M2,
     "qm": Unit.M2,
     "h": Unit.H,
+    "ore": Unit.H,
     "std": Unit.H,
     "ls": Unit.LS,
+    "ac": Unit.LS,
+    "a corpo": Unit.LS,
+    "una tantum": Unit.LS,
+    "forfait": Unit.LS,
     "pauschale": Unit.LS,
     "system": Unit.SYSTEM,
+    "up": Unit.SYSTEM,
     "anlage": Unit.SYSTEM,
 }
 

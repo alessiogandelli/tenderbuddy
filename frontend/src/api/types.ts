@@ -29,12 +29,45 @@ export type PriceSource = "catalog" | "supplier_package";
 
 export type PipelineStep =
   | "read"
+  | "classify_pages"
   | "parse"
+  | "overview"
   | "classify"
   | "canonicalize"
   | "match"
   | "price"
   | "aggregate";
+
+export type PageType =
+  | "cover"
+  | "index"
+  | "captions"
+  | "legal"
+  | "specifications"
+  | "modulo_offerta"
+  | "preziario"
+  | "lv_table"
+  | "lv_other"
+  | "other";
+
+export interface PageClassification {
+  page: number;
+  type: PageType;
+  confidence: number;
+  reason: string | null;
+}
+
+export interface Detection {
+  page: number;
+  description: string | null;
+  quantity: number | null;
+  unit: Unit | null;
+  name_bbox: number[] | null;
+  price_bbox: number[] | null;
+  kept: boolean;
+  reason: string | null;
+  lv_id: string | null;
+}
 
 export type PipelineStatus = "pending" | "running" | "done" | "failed";
 
@@ -58,6 +91,8 @@ export interface Item {
   system: string | null;
   source_page: number | null;
   source_bbox: number[] | null;
+  name_bbox: number[] | null;
+  price_bbox: number[] | null;
   description_raw: string | null;
   description_normalized: string | null;
   attributes: Record<string, unknown>;
@@ -84,6 +119,9 @@ export interface PositionResult {
   match_confidence: number | null;
   review_required: boolean;
   status: ItemStatus;
+  base_hours_per_unit: number | null;
+  hourly_rate_chf: number | null;
+  factor_product: number | null;
 }
 
 export interface Summary {
@@ -92,6 +130,8 @@ export interface Summary {
   direct_cost_chf: number;
   cost_baseline_chf: number;
   indicative_selling_price_chf: number;
+  project_costs_chf: number;
+  include_project_costs: boolean;
 }
 
 export interface BidScenario {
@@ -122,12 +162,47 @@ export interface PipelineState {
   status: PipelineStatus;
   updated_at: string | null;
   error: string | null;
+  item_count: number;
+  message: string | null;
+}
+
+export interface Usage {
+  calls: number;
+  p50_ms: number;
+  p95_ms: number;
+  errors: number;
+  retries: number;
+  escalation_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
 }
 
 export interface Profile {
   catalog_version: string;
   productivity_version: string;
   parameters_version: string;
+}
+
+export interface Overview {
+  summary: string;
+  systems: string[];
+  materials_needed: string[];
+  labour_needed: string[];
+  engine: "luna" | "deterministic" | string;
+}
+
+export interface ProjectParameters {
+  project?: Record<string, unknown>;
+  productivity_factors: Record<string, number>;
+  allowances: Record<string, number>;
+  project_costs: Record<string, number>;
+  commercial: { overhead_pct: number; target_margin_pct: number; round_to_chf: number };
+  stretch_bid_optimization: {
+    scenario_margins_pct: Record<string, number>;
+    [key: string]: unknown;
+  };
+  include_project_costs?: boolean;
 }
 
 export interface BandoTotals {
@@ -148,10 +223,15 @@ export interface Bando {
   pipeline: PipelineState;
   profile: Profile;
   coverage: Coverage;
+  page_types: PageClassification[];
+  detections: Detection[];
   items: Item[];
   position_results: PositionResult[];
   summary: Summary;
   recommended_bid_range: BidRange | null;
+  overview: Overview | null;
+  parameters: ProjectParameters | null;
+  usage: Usage | null;
 }
 
 export interface BandoSummary {

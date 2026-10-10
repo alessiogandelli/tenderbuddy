@@ -4,6 +4,7 @@ import type {
   Classification,
   ItemFlag,
   ItemStatus,
+  PageType,
   PipelineStatus,
   PipelineStep,
 } from "../api/types";
@@ -34,7 +35,9 @@ export const FLAG_LABELS: Record<ItemFlag, string> = {
 
 export const STEP_LABELS: Record<PipelineStep, string> = {
   read: "Lettura PDF",
+  classify_pages: "Classificazione pagine",
   parse: "Estrazione posizioni",
+  overview: "Panoramica del documento",
   classify: "Classificazione bando",
   canonicalize: "Normalizzazione",
   match: "Match catalogo",
@@ -44,13 +47,41 @@ export const STEP_LABELS: Record<PipelineStep, string> = {
 
 export const PIPELINE_ORDER: PipelineStep[] = [
   "read",
+  "classify_pages",
   "parse",
+  "overview",
   "classify",
   "canonicalize",
   "match",
   "price",
   "aggregate",
 ];
+
+export const PAGE_TYPE_LABELS: Record<PageType, string> = {
+  lv_table: "Tabella LV",
+  lv_other: "LV altro formato",
+  cover: "Copertina",
+  index: "Indice",
+  captions: "Divisore",
+  legal: "Legale",
+  specifications: "Specifiche tecniche",
+  modulo_offerta: "Modulo offerta",
+  preziario: "Preziario",
+  other: "Altro",
+};
+
+export const PAGE_TYPE_COLORS: Record<PageType, string> = {
+  lv_table: "#16a34a",
+  lv_other: "#d59a08",
+  cover: "#7c3aed",
+  index: "#64748b",
+  captions: "#94a3b8",
+  legal: "#dc2626",
+  specifications: "#2563eb",
+  modulo_offerta: "#0d9488",
+  preziario: "#ea580c",
+  other: "#94a3b8",
+};
 
 export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
   pending: "In attesa",
@@ -85,25 +116,3 @@ export function itemNeedsAttention(status: ItemStatus, flags: ItemFlag[]): boole
   if (status !== "calculated" && status !== "out_of_scope") return true;
   return flags.some((flag) => ATTENTION_FLAGS.includes(flag));
 }
-
-export const GLOSSARY: Record<string, string> = {
-  Bando: "Il documento di gara pubblicato dal committente, unità di lavoro dell'app.",
-  Item: "Un'unità prezzabile estratta dal Bando, o creata a mano.",
-  "Cost Baseline":
-    "La base di costo del Bando: costo diretto maggiorato di overhead e trasporto. Non include i costi di progetto (engineering, commissioning, igiene, documentazione).",
-  "Prezzo indicativo": "Il prezzo di vendita calcolato dal Cost Baseline e dal Margine.",
-  "Fascia di offerta":
-    "I tre scenari (Aggressive, Target, Conservative) con prezzo, margine, probabilità di aggiudicazione e contributo atteso.",
-  "Pagina sorgente": "La pagina del PDF da cui un Item è stato estratto.",
-  Catalogo: "L'elenco curato di Prodotti e Pacchetti fornitore contro cui si prezza.",
-  "Pacchetto fornitore":
-    "Una voce di Catalogo che non possiamo prezzare e che richiede un preventivo del fornitore.",
-  Match: "L'assegnazione di un Item a un Prodotto, con una confidenza.",
-  "Install Code": "La chiave che lega un Item alla relativa Regola di produttività.",
-  "Regola di produttività": "Le ore base per unità e il ruolo di manodopera per un Install Code.",
-  "Parametri di progetto":
-    "I fattori, le maggiorazioni e le condizioni commerciali specifici del progetto.",
-  Copertura: "Quanta parte del Bando è prezzata rispetto a quanto resta da sistemare.",
-  Flag: "Ciò che non è stato capito o che manca in un Item.",
-  Preventivo: "Il risultato prezzato di un Bando.",
-};

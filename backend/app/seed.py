@@ -7,6 +7,7 @@ asserts this). Also copies the tender PDF so the viewer works on first run.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -18,6 +19,7 @@ from .domain.models import Bando, Item, Match
 from .pipeline.extractors import PdfReader, default_reader
 from .pipeline.pricing_db import PricingDB, get_pricing_db
 from .pipeline.runner import recompute
+from .pipeline.steps.overview import deterministic_overview
 from . import storage
 from .util import now_iso
 
@@ -37,6 +39,16 @@ _LOCATE_UNIT = {
     Unit.LS: "LS",
     Unit.SYSTEM: "System",
 }
+
+# ``600x600x1750`` / ``400 x 300 x 1250`` in a description: a distinctive needle.
+_DIMENSION_RE = re.compile(r"\b(\d+)\s*[x×]\s*(\d+)(?:\s*[x×]\s*(\d+))?\b")
+
+
+def _dimension(text: Optional[str]) -> Optional[str]:
+    match = _DIMENSION_RE.search(text or "")
+    if not match:
+        return None
+    return "x".join(group for group in match.groups() if group)
 
 
 def _status(value: str) -> ItemStatus:
@@ -113,19 +125,49 @@ def build_seed_bando(
     bando.pipeline.status = PipelineStatus.DONE
     bando.pipeline.updated_at = created
     recompute(bando, db)
+    bando.overview = deterministic_overview(bando.items, db)
     return bando
 
 
 def _populate_bboxes(items: List[Item], reader: PdfReader, tender: Path) -> None:
-    """Give the seeded Items a source region so the PDF highlights on first run."""
+    """Give the seeded Items a source region so the PDF highlights on first run.
+
+    A dimension in the description (``600x600x1750``) is the most specific
+    needle; when it does not appear verbatim we fall back to the row's
+    unit/quantity (``Stk 5``), pairing repeated needles with rows in reading
+    order.
+    """
+    occurrences: dict = {}
+    locate_all = getattr(reader, "locate_all", None)
     for item in items:
         if not item.source_page or item.quantity is None or item.unit is None:
             continue
+
+        bbox = None
+        dimension = _dimension(item.description_raw)
+        if dimension:
+            bbox = reader.locate(tender, item.source_page, dimension)
+            if bbox:
+                item.source_bbox = list(bbox)
+                continue
+
         token = _LOCATE_UNIT.get(item.unit)
         if not token:
             continue
         quantity = int(item.quantity) if float(item.quantity).is_integer() else item.quantity
-        bbox = reader.locate(tender, item.source_page, "%s %s" % (token, quantity))
+        needle = "%s %s" % (token, quantity)
+        key = (item.source_page, needle)
+        index = occurrences.get(key, 0)
+        occurrences[key] = index + 1
+
+        if locate_all is not None:
+            matches = locate_all(tender, item.source_page, needle)
+            if matches:
+                bbox = matches[index] if index < len(matches) else matches[-1]
+            else:
+                bbox = reader.locate(tender, item.source_page, needle)
+        else:
+            bbox = reader.locate(tender, item.source_page, needle)
         if bbox:
             item.source_bbox = list(bbox)
 

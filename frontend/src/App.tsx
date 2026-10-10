@@ -1,16 +1,14 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { ArchivePage } from "./pages/ArchivePage";
-import { BandoPage } from "./pages/BandoPage";
-import { CatalogPage } from "./pages/CatalogPage";
+import { LandingPage } from "./pages/LandingPage";
+import { WorkbenchPage } from "./pages/WorkbenchPage";
 
 const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: "/", element: <ArchivePage /> },
-      { path: "/bandi/:id", element: <BandoPage /> },
-      { path: "/catalogo", element: <CatalogPage /> },
+      { path: "/", element: <LandingPage /> },
+      { path: "/bandi/:id", element: <WorkbenchPage /> },
     ],
   },
 ]);

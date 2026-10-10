@@ -1,21 +1,23 @@
 """Bando endpoints: archive, upload, detail, manual items, PDF, export."""
 from __future__ import annotations
 
+import copy
 import csv
 import io
 import re
 import threading
 import uuid
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from .. import storage
-from ..domain.enums import Classification, PipelineStatus, PipelineStep
-from ..domain.models import Bando, Item
+from ..domain.enums import Classification, ItemStatus, PipelineStatus, PipelineStep, PriceSource, Unit
+from ..domain.models import Bando, Item, Match
 from ..pipeline.extractors import default_reader
+from ..pipeline.pricing_db import get_pricing_db
 from ..pipeline.runner import recompute, run_pipeline
 from ..util import now_iso
 
@@ -26,6 +28,33 @@ class BandoPatch(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     classification: Optional[Classification] = None
+
+
+class ItemPatch(BaseModel):
+    """Fields a reviewer can change inline; the status is always recomputed."""
+
+    description_raw: Optional[str] = None
+    quantity: Optional[float] = None
+    unit: Optional[Unit] = None
+    product_id: Optional[str] = None
+    install_code: Optional[str] = None
+    confidence: Optional[float] = None
+
+
+class ParametersPatch(BaseModel):
+    """Partial Parameters update; nested dicts are merged, price is recomputed."""
+
+    parameters: Dict[str, object]
+
+
+def _deep_merge(base: dict, patch: dict) -> dict:
+    out = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -72,7 +101,7 @@ async def upload_bando(
     return storage.get_bando(bando_id).model_dump(mode="json")
 
 
-def _run_in_background(bando_id: str) -> None:
+def _run_in_background(bando_id: str, deep: bool = False) -> None:
     def work() -> None:
         bando = storage.get_bando(bando_id)
         if bando is None:
@@ -87,6 +116,7 @@ def _run_in_background(bando_id: str) -> None:
                 storage.pdf_path(bando_id),
                 reader=default_reader(),
                 on_step=on_step,
+                deep=deep,
             )
         except Exception:  # noqa: BLE001 - failure is persisted in pipeline state
             pass
@@ -97,7 +127,10 @@ def _run_in_background(bando_id: str) -> None:
 
 @router.get("/{bando_id}")
 def get_bando(bando_id: str) -> dict:
-    return _get_or_404(bando_id).model_dump(mode="json")
+    bando = _get_or_404(bando_id)
+    if bando.parameters is None:
+        bando.parameters = copy.deepcopy(get_pricing_db().parameters)
+    return bando.model_dump(mode="json")
 
 
 @router.patch("/{bando_id}")
@@ -110,6 +143,17 @@ def patch_bando(bando_id: str, patch: BandoPatch) -> dict:
     if patch.classification is not None:
         bando.classification = patch.classification
     bando.updated_at = now_iso()
+    storage.save_bando(bando)
+    return bando.model_dump(mode="json")
+
+
+@router.patch("/{bando_id}/parameters")
+def patch_parameters(bando_id: str, patch: ParametersPatch) -> dict:
+    """Edit the Bando's pricing Parameters; the whole quote is recomputed."""
+    bando = _get_or_404(bando_id)
+    base = copy.deepcopy(bando.parameters or get_pricing_db().parameters)
+    bando.parameters = _deep_merge(base, patch.parameters)
+    recompute(bando)
     storage.save_bando(bando)
     return bando.model_dump(mode="json")
 
@@ -127,7 +171,7 @@ def get_pipeline(bando_id: str) -> dict:
 
 
 @router.post("/{bando_id}/run")
-def run_bando(bando_id: str) -> dict:
+def run_bando(bando_id: str, deep: bool = False) -> dict:
     bando = _get_or_404(bando_id)
     pdf = storage.pdf_path(bando_id)
     if not pdf.exists():
@@ -138,7 +182,7 @@ def run_bando(bando_id: str) -> dict:
     bando.pipeline.error = None
     bando.updated_at = now_iso()
     storage.save_bando(bando)
-    _run_in_background(bando_id)
+    _run_in_background(bando_id, deep=deep)
     return bando.model_dump(mode="json")
 
 
@@ -157,6 +201,41 @@ def add_item(bando_id: str, item: Item) -> dict:
     if not item.lv_id:
         item.lv_id = _next_manual_id(bando.items)
     bando.items = bando.items + [item]
+    recompute(bando)
+    storage.save_bando(bando)
+    return bando.model_dump(mode="json")
+
+
+@router.patch("/{bando_id}/items/{lv_id}")
+def patch_item(bando_id: str, lv_id: str, patch: ItemPatch) -> dict:
+    """Edit one position inline. The status is always recomputed, never forced."""
+    bando = _get_or_404(bando_id)
+    item = next((existing for existing in bando.items if existing.lv_id == lv_id), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Posizione %s non trovata" % lv_id)
+
+    if patch.description_raw is not None:
+        item.description_raw = patch.description_raw
+        item.description_normalized = patch.description_raw.strip()
+    if patch.quantity is not None:
+        item.quantity = patch.quantity
+    if patch.unit is not None:
+        item.unit = patch.unit
+    if patch.product_id is not None:
+        product = get_pricing_db().product(patch.product_id)
+        install_code = patch.install_code or (product.install_code if product else None)
+        price_source = (
+            PriceSource.SUPPLIER_PACKAGE
+            if product is not None and product.supplier_quote_required
+            else PriceSource.CATALOG
+        )
+        item.match = Match(
+            product_id=patch.product_id,
+            install_code=install_code,
+            confidence=patch.confidence if patch.confidence is not None else 0.9,
+            price_source=price_source,
+        )
+
     recompute(bando)
     storage.save_bando(bando)
     return bando.model_dump(mode="json")
@@ -232,6 +311,7 @@ def export_bando(bando_id: str, format: str = Query("json")) -> Response:
             if bando.recommended_bid_range
             else None
         ),
+        "usage": bando.usage,
     }
     return JSONResponse(
         content=payload,

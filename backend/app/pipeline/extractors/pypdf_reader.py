@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from .base import BBox, Document, Page
+from .base import BBox, Column, Document, Page
 
 
 class PypdfTextReader:
@@ -24,4 +24,15 @@ class PypdfTextReader:
         return Document(page_count=len(pages), pages=pages)
 
     def locate(self, path: Path, page_number: int, needle: str) -> Optional[BBox]:
+        return None
+
+    def render_png(self, path: Path, page_number: int, dpi: int = 150) -> Optional[bytes]:
+        return None
+
+    def locate_word(self, path: Path, page_number: int, word: str) -> Optional[float]:
+        return None
+
+    def column_bounds(
+        self, path: Path, page_number: int, header: str
+    ) -> Optional[Column]:
         return None

@@ -1,32 +1,18 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { HealthBadge } from "./HealthBadge";
+import { Link, Outlet } from "react-router-dom";
 
 export function Layout() {
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand__kicker">Equans · Sprintd</span>
-          <h1>Bando → Preventivo</h1>
-          <p className="brand__sub">Dal documento di gara al primo prezzo</p>
-        </div>
-        <nav>
-          <NavLink to="/" end>
-            <span aria-hidden>📁</span> Archivio bandi
-          </NavLink>
-          <NavLink to="/catalogo">
-            <span aria-hidden>📚</span> Catalogo
-          </NavLink>
-        </nav>
-        <div className="sidebar__foot">
-          <p>
-            Carichi un bando, rivedi ciò che è incerto, leggi il preventivo. Tutto
-            tracciabile alla pagina del PDF.
-          </p>
-          <HealthBadge />
-        </div>
-      </aside>
-      <main className="content">
+    <div className="app">
+      <header className="topbar">
+        <Link to="/" className="topbar__brand">
+          <span className="topbar__mark" aria-hidden />
+          <span className="topbar__name">
+            Bando<span className="topbar__arrow">→</span>Preventivo
+          </span>
+        </Link>
+        <span className="topbar__kicker">Equans · Sprintd Zurich</span>
+      </header>
+      <main className="app__main">
         <Outlet />
       </main>
     </div>

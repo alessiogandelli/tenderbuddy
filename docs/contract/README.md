@@ -28,7 +28,9 @@ Regole:
     "step": "price",        // step corrente o ultimo completato: §5
     "status": "done",       // "pending" | "running" | "done" | "failed"
     "updated_at": "2026-10-10T09:05:00Z",
-    "error": null           // stringa quando status = "failed"
+    "error": null,          // stringa quando status = "failed"
+    "item_count": 269,      // progresso live: posizioni estratte finora
+    "message": "Completato" // progresso live: testo dello step in corso
   },
 
   "profile": {              // Profilo di prezzatura applicato
@@ -50,7 +52,31 @@ Regole:
   "items": [ Item ],            // §2
   "position_results": [ ... ],  // §3
   "summary": { ... },           // §3
-  "recommended_bid_range": { ... } // §3
+  "recommended_bid_range": { ... }, // §3
+
+  // Additivo. Panoramica dell'intero documento, prodotta da Luna (o dal
+  // fallback deterministico): utile all'utente e al match dei prodotti.
+  "overview": {
+    "summary": "Impianto di ventilazione per la scuola di Oberglatt …",
+    "systems": ["244.01 LA01 Nebenraeume UG"],
+    "materials_needed": ["valvole di mandata", "serrande tagliafuoco"],
+    "labour_needed": ["posa canali", "bilanciamento", "collaudo"],
+    "engine": "luna"                 // "luna" | "deterministic"
+  },
+
+  // Additivo. I Parametri di prezzatura di questo Bando: copia editabile di
+  // project_parameters.json. Assente => si applicano i default del dataset.
+  // `include_project_costs` decide se i costi di progetto entrano nel prezzo.
+  "parameters": { ...project_parameters..., "include_project_costs": false },
+
+  // Additivo. Presente solo quando il preventivo è stato prodotto dall'AI
+  // (extraction + matching): token, costo e latenza del run. `null` in modalità
+  // deterministica o sui bandi creati a mano.
+  "usage": {
+    "calls": 23, "p50_ms": 820.4, "p95_ms": 2140.1,
+    "errors": 0, "retries": 1, "escalation_calls": 3,
+    "input_tokens": 148230, "output_tokens": 9120, "cost_usd": 0.0455
+  }
 }
 ```
 
@@ -127,7 +153,11 @@ Identici allo schema già presente in `data/expected_output_example.json`. Sinta
   "price_source": "catalog",
   "match_confidence": 0.92,
   "review_required": false,
-  "status": "calculated"
+  "status": "calculated",
+  // Additivi: i termini del calcolo manodopera, così la riga si spiega da sé.
+  "base_hours_per_unit": 0.65,
+  "hourly_rate_chf": 96.0,
+  "factor_product": 0.9572
 }
 
 // summary
@@ -136,7 +166,10 @@ Identici allo schema già presente in `data/expected_output_example.json`. Sinta
   "labour_cost_chf": 95073.83,
   "direct_cost_chf": 372700.12,
   "cost_baseline_chf": 414489.12,
-  "indicative_selling_price_chf": 438612.83   // aggiuntivo, vedi §4
+  "indicative_selling_price_chf": 438612.83,  // aggiuntivo, vedi §4
+  // Additivi: costi di progetto e se sono inclusi in direct_cost_chf.
+  "project_costs_chf": 0.0,
+  "include_project_costs": false
 }
 
 // recommended_bid_range
@@ -176,7 +209,7 @@ L'`adjusted_install_hours` mostrato in output è arrotondato a 2 decimali; il ca
 cost_baseline = Σ direct_cost × (1 + overhead/100) × (1 + transport/100)
 indicative_selling_price = cost_baseline / (1 - target/100)      # mostrato, non è la base dei bid
 ```
-> **Attenzione:** il `cost_baseline` golden **esclude** `project_costs` (engineering, commissioning, hygiene, documentation), `small_material_pct` e `supplier_package_contingency_pct`, nonostante `data/README.md` li includa nel build-up. La ground truth vince. Il build-up completo si può mostrare come *breakdown a parte, etichettato*, mai come numero headline.
+> **Attenzione:** il `cost_baseline` golden **esclude** `project_costs` (engineering, commissioning, hygiene, documentation), `small_material_pct` e `supplier_package_contingency_pct`, nonostante `data/README.md` li includa nel build-up. La ground truth vince. Il preventivatore può però **accendere il toggle** `parameters.include_project_costs`: allora `Σ project_costs` entra in `direct_cost_chf` e quindi in baseline/prezzo (resta il default spento).
 
 **Fascia di offerta** (margini `scenario_margins_pct`: 2.5 / 4.0 / 6.5):
 ```
@@ -211,9 +244,17 @@ Con i parametri forniti: `reference_win_probability = 0.55`, `strategic_appetite
 
 **`price_source`**: `catalog` | `supplier_package`
 
-**`pipeline.step`**: `read` | `parse` | `classify` | `canonicalize` | `match` | `price` | `aggregate`
+**`pipeline.step`**: `read` | `parse` | `overview` | `classify` | `canonicalize` | `match` | `price` | `aggregate`
 
 **`pipeline.status`**: `pending` | `running` | `done` | `failed`
+
+**`pipeline.message`** / **`pipeline.item_count`**: progresso live per la schermata di elaborazione. Il frontend li legge mentre lo stato è `running` per mostrare il passo corrente e contare le posizioni già estratte.
+
+**`overview`** (additivo): panorama dell'intero documento. `engine` è `luna` quando la legge un modello, `deterministic` quando è ricavata dagli Item (AI spenta o fallita). `materials_needed` e `labour_needed` sono usati dall'utente e dal match.
+
+**`parameters`** (additivo): i Parametri di prezzatura del Bando (copia di `project_parameters.json`, editabile). Includono `include_project_costs` (default `false`). `null`/assente => default del dataset.
+
+**`usage`**: additivo, `null` se il preventivo è deterministico. Quando l'AI è attiva riporta `calls`, `p50_ms`, `p95_ms`, `errors`, `retries`, `escalation_calls`, `input_tokens`, `output_tokens`, `cost_usd`.
 
 **`classification`**: `ventilation` | `hvac` | `plumbing` | `electrical` | `building` | `other`
 
@@ -228,18 +269,20 @@ Con i parametri forniti: `reference_win_probability = 0.55`, `strategic_appetite
 | POST | `/api/bandi` | upload PDF (`multipart/form-data`, campo `file`; campi opzionali `title`, `description`) | `Bando` |
 | GET | `/api/bandi/{id}` | dettaglio completo | `Bando` |
 | PATCH | `/api/bandi/{id}` | correggi `title`/`description`/`classification` | `Bando` |
+| PATCH | `/api/bandi/{id}/parameters` | correggi i Parametri (merge parziale di `parameters`, es. `commercial.target_margin_pct`, `include_project_costs`) | `Bando` |
 | DELETE | `/api/bandi/{id}` | rimuovi il Bando | `{ok}` |
 | GET | `/api/bandi/{id}/pipeline` | stato pipeline | `pipeline` |
 | POST | `/api/bandi/{id}/run` | rilancia la pipeline | `Bando` |
 | PUT | `/api/bandi/{id}/items` | sostituisci gli `items` (percorso manuale) | `Bando` |
 | POST | `/api/bandi/{id}/items` | aggiungi un Item manuale | `Bando` |
+| PATCH | `/api/bandi/{id}/items/{lv_id}` | correggi una posizione (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`) | `Bando` |
 | GET | `/api/bandi/{id}/pdf` | il PDF sorgente | `application/pdf` |
 | GET | `/api/bandi/{id}/export` | export del preventivo | JSON o CSV |
 | GET | `/api/catalog` | Prodotti | `Product[]` |
 | GET | `/api/productivity` | Regole di produttività | `ProductivityRule[]` |
 | GET | `/api/parameters` | Parametri di progetto | oggetto `project_parameters` |
 
-Dopo ogni scrittura (`POST /run`, `PUT /items`, `POST /items`) il backend **ricalcola** `position_results`, `summary` e `recommended_bid_range` e restituisce il `Bando` aggiornato. Il frontend non calcola mai il prezzo: lo mostra.
+Dopo ogni scrittura (`POST /run`, `PUT /items`, `POST /items`, `PATCH /items/{lv_id}`, `PATCH /parameters`) il backend **ricalcola** `position_results`, `summary` e `recommended_bid_range` e restituisce il `Bando` aggiornato. Il frontend non calcola mai il prezzo: lo mostra.
 
 ---
 

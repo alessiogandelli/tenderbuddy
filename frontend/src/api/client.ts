@@ -61,16 +61,39 @@ export const api = {
     patch: { title?: string; description?: string; classification?: string },
   ) => request<Bando>(`/bandi/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
+  patchParameters: (id: string, parameters: Record<string, unknown>) =>
+    request<Bando>(`/bandi/${id}/parameters`, {
+      method: "PATCH",
+      body: JSON.stringify({ parameters }),
+    }),
+
   deleteBando: (id: string) =>
     request<{ ok: boolean }>(`/bandi/${id}`, { method: "DELETE" }),
 
-  runPipeline: (id: string) =>
-    request<Bando>(`/bandi/${id}/run`, { method: "POST" }),
+  runPipeline: (id: string, deep = false) =>
+    request<Bando>(`/bandi/${id}/run${deep ? "?deep=true" : ""}`, { method: "POST" }),
 
   addItem: (id: string, item: Partial<Item>) =>
     request<Bando>(`/bandi/${id}/items`, {
       method: "POST",
       body: JSON.stringify(item),
+    }),
+
+  patchItem: (
+    id: string,
+    lvId: string,
+    patch: {
+      description_raw?: string;
+      quantity?: number;
+      unit?: string;
+      product_id?: string;
+      install_code?: string;
+      confidence?: number;
+    },
+  ) =>
+    request<Bando>(`/bandi/${id}/items/${lvId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
     }),
 
   replaceItems: (id: string, items: Item[]) =>

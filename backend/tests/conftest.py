@@ -7,6 +7,9 @@ import time
 
 # Must be set before app.config is imported anywhere.
 os.environ.setdefault("BANDO_RUNTIME_DIR", tempfile.mkdtemp(prefix="bando-test-"))
+# Keep the suite deterministic and free even when a key is in the env: tests
+# exercise the deterministic parser/matcher, never the API.
+os.environ.setdefault("BANDO_AI_MODE", "off")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -28,13 +31,46 @@ def seed_id() -> str:
 
 
 def _tiny_pdf(path):
+    """A one-page miniature of a real German LV page: column header, a description
+    block, then variant rows whose unit token and quantity sit on separate lines
+    (the layout the real tender uses)."""
     import fitz
 
     doc = fitz.open()
     page = doc.new_page()
-    page.insert_text((72, 100), "Zuluft - Tellerventil aus Kunststoff")
-    page.insert_text((72, 120), "Groesse Ø 10 cm Stk 5")
-    page.insert_text((72, 140), "Ø 12.5 cm Stk 6")
+    header = [
+        "SH Erlenstrasse Oberglatt",
+        "244.01 LA01 Nebenraeume",
+        "Seite 1 / 1",
+        "Pos.",
+        "Gegenstand",
+        "Mass-",
+        "Gattg.",
+        "Einheits-",
+        "Preis",
+        "Betrag",
+        "Fr.",
+        "C",
+        "ARMATUREN UND INSTRUMENTE",
+    ]
+    y = 40
+    for line in header:
+        page.insert_text((72, y), line)
+        y += 14
+    body = [
+        "Zuluft - Tellerventil aus Kunststoff",
+        "Fabrikat z.B. Trox Hesco",
+        "Groesse \u00d8 10 cm",
+        "Stk",
+        "5",
+        "\u00d8 12.5 cm",
+        "Stk",
+        "6",
+    ]
+    y += 10
+    for line in body:
+        page.insert_text((72, y), line)
+        y += 14
     doc.save(str(path))
     doc.close()
 

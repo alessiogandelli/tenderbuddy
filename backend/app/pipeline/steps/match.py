@@ -52,6 +52,11 @@ _CATEGORY_HINTS = [
 
 _TOKEN_RE = re.compile(r"[a-zäöü0-9]{4,}")
 
+# The AI matcher's pre-filter size. The catalog is small (56 products) and only
+# the unit-compatible subset goes in, so a wide net is cheap and keeps the
+# correct product available (measured by the eval's candidate_recall).
+CANDIDATE_K = 20
+
 
 def _tokens(text: str) -> set:
     return set(_TOKEN_RE.findall(text.lower()))
@@ -83,13 +88,61 @@ def _unit_compatible(item: Item, product: Product) -> bool:
     return product.unit.lower() == item.unit.value.lower()
 
 
-def match_items(items: List[Item], db: PricingDB) -> List[Item]:
-    product_tokens = {
+def _score(item: Item, product: Product, hinted: Optional[str],
+           item_tokens: set, product_tokens: set) -> float:
+    score = 0.0
+    if hinted and product.category:
+        category = product.category.lower()
+        if hinted == category:
+            score += 0.6
+        elif hinted in category or category in hinted:
+            score += 0.3
+    overlap = item_tokens & product_tokens
+    if overlap:
+        score += min(0.3, 0.1 * len(overlap))
+    if _size_matches(item, product):
+        score += 0.3
+    elif item.attributes.get("dn") is not None:
+        score -= 0.4
+    if item.attributes.get("fire_class") and product.category == "Fire protection":
+        score += 0.05
+    return score
+
+
+def _product_tokens(db: PricingDB) -> dict:
+    return {
         p.product_id: _tokens(
             "%s %s %s %s" % (p.description or "", p.model or "", p.category or "", p.subcategory or "")
         )
         for p in db.product_list
     }
+
+
+def candidate_products(
+    item: Item,
+    db: PricingDB,
+    k: int = CANDIDATE_K,
+    product_tokens: Optional[dict] = None,
+) -> List[Product]:
+    """Unit-compatible catalog products ranked by the deterministic score.
+
+    Used by the AI matcher as its pre-filter, and measured by the eval's
+    ``candidate_recall`` so a filter miss is never blamed on the model.
+    """
+    product_tokens = product_tokens if product_tokens is not None else _product_tokens(db)
+    text = "%s %s" % (item.description_raw or "", item.description_normalized or "")
+    hinted = _hint_category(text)
+    item_tokens = _tokens(text)
+    compatible = [p for p in db.product_list if _unit_compatible(item, p)]
+    ranked = sorted(
+        compatible,
+        key=lambda p: (-_score(item, p, hinted, item_tokens, product_tokens[p.product_id])),
+    )
+    return ranked[:k]
+
+
+def match_items(items: List[Item], db: PricingDB) -> List[Item]:
+    tokens = _product_tokens(db)
 
     for item in items:
         text = "%s %s" % (item.description_raw or "", item.description_normalized or "")
@@ -101,22 +154,7 @@ def match_items(items: List[Item], db: PricingDB) -> List[Item]:
         for product in db.product_list:
             if not _unit_compatible(item, product):
                 continue
-            score = 0.0
-            if hinted and product.category:
-                category = product.category.lower()
-                if hinted == category:
-                    score += 0.6
-                elif hinted in category or category in hinted:
-                    score += 0.3
-            overlap = item_tokens & product_tokens[product.product_id]
-            if overlap:
-                score += min(0.3, 0.1 * len(overlap))
-            if _size_matches(item, product):
-                score += 0.3
-            elif item.attributes.get("dn") is not None:
-                score -= 0.4
-            if item.attributes.get("fire_class") and product.category == "Fire protection":
-                score += 0.05
+            score = _score(item, product, hinted, item_tokens, tokens[product.product_id])
             if score > best_score:
                 best_score = score
                 best = product

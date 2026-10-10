@@ -12,6 +12,31 @@ _RECT_RE = re.compile(r"(\d{2,4})\s*[x×]\s*(\d{2,4})")
 _FIRE_RE = re.compile(r"EI\s*(\d{2,3})", re.IGNORECASE)
 
 
+def _dedupe_key(item: Item):
+    """Signature of an identical row. Repeated CPN codes across systems
+    (UTA1 vs UTA2) stay distinct because the system is part of the key."""
+    pos = item.attributes.get("pos_number") if item.attributes else None
+    desc = (item.description_normalized or item.description_raw or "").strip().lower()
+    unit = item.unit.value if item.unit else None
+    return (item.system, pos, desc, item.quantity, unit)
+
+
+def dedupe_items(items: List[Item]) -> List[Item]:
+    """Drop exact duplicates (same system, code, description, quantity, unit)."""
+    seen = set()
+    unique: List[Item] = []
+    for item in items:
+        key = _dedupe_key(item)
+        if all(part is None or part == "" for part in key[:4]):
+            unique.append(item)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
+
+
 def canonicalize_items(items: List[Item]) -> List[Item]:
     for item in items:
         text = " ".join(
@@ -45,4 +70,4 @@ def canonicalize_items(items: List[Item]) -> List[Item]:
         if item.description_raw and not item.description_normalized:
             item.description_normalized = item.description_raw.strip()
 
-    return items
+    return dedupe_items(items)

@@ -1,5 +1,6 @@
 .venv/
 .uvvenv/
+.env
 runtime/
 __pycache__/
 *.pyc

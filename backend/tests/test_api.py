@@ -41,6 +41,12 @@ def test_upload_runs_pipeline_and_extracts_items(client, fresh_bando):
     assert {item["quantity"] for item in bando["items"]} == {5.0, 6.0}
     assert all(item["unit"] == "pc" for item in bando["items"])
     assert all(item["source_page"] == 1 for item in bando["items"])
+    # Page classification runs first and the LV table page is recognized.
+    assert [pt["type"] for pt in bando["page_types"]] == ["lv_table"]
+    # The contract carries the two box fields (null on the deterministic path).
+    assert all("name_bbox" in item and "price_bbox" in item for item in bando["items"])
+    # Detections (kept + discarded vision rows) are part of the contract.
+    assert "detections" in bando
 
 
 def test_manual_item_is_priced_like_pipeline(client, fresh_bando):
@@ -81,3 +87,27 @@ def test_uncertain_items_are_flagged_not_dropped(client, fresh_bando):
     result = next(r for r in bando["position_results"] if r["lv_id"] == "MAN0002")
     assert result["material_cost_chf"] is None
     assert result["status"] == "review_required"
+
+
+def test_patch_item_recomputes_the_price_inline(client, fresh_bando):
+    bando = client.get("/api/bandi/%s" % fresh_bando).json()
+    lv_id = bando["items"][0]["lv_id"]
+    response = client.patch(
+        "/api/bandi/%s/items/%s" % (fresh_bando, lv_id),
+        json={"quantity": 10.0, "product_id": "P-AIR-001", "confidence": 0.9},
+    )
+    assert response.status_code == 200
+    updated = response.json()
+    item = next(i for i in updated["items"] if i["lv_id"] == lv_id)
+    assert item["quantity"] == 10.0
+    assert item["match"]["product_id"] == "P-AIR-001"
+    result = next(r for r in updated["position_results"] if r["lv_id"] == lv_id)
+    assert result["direct_position_cost_chf"] is not None
+    assert result["status"] == "calculated"
+
+
+def test_patch_unknown_item_is_404(client, fresh_bando):
+    response = client.patch(
+        "/api/bandi/%s/items/NOPE" % fresh_bando, json={"quantity": 1.0}
+    )
+    assert response.status_code == 404

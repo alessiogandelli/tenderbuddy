@@ -10,7 +10,7 @@ import pandas as pd
 from ..config import DATA_DIR
 from ..domain.models import Product, ProductivityRule
 
-CATALOG_FILE = "catalog.csv"
+CATALOG_FILE = "catalog_extended.csv"
 PRODUCTIVITY_FILE = "productivity.csv"
 PARAMETERS_FILE = "project_parameters.json"
 
@@ -81,6 +81,16 @@ class PricingDB:
     def rule(self, install_code: str) -> ProductivityRule | None:
         return self.rules.get(install_code)
 
+    def with_parameters(self, parameters: dict) -> "PricingDB":
+        """A view of this dataset priced with a Bando's own Parameters."""
+        clone = PricingDB.__new__(PricingDB)
+        clone.data_dir = self.data_dir
+        clone.products = self.products
+        clone.product_list = self.product_list
+        clone.rules = self.rules
+        clone.parameters = parameters
+        return clone
+
     @property
     def waste_pct(self) -> float:
         return float(self.parameters["allowances"]["material_waste_pct"])
@@ -102,8 +112,28 @@ class PricingDB:
         return int(self.parameters["commercial"]["round_to_chf"])
 
     @property
+    def include_project_costs(self) -> bool:
+        return bool(self.parameters.get("include_project_costs", False))
+
+    @property
     def factors(self) -> dict:
         return self.parameters["productivity_factors"]
+
+    def project_costs_chf(self) -> float:
+        """Engineering + commissioning (hours x rate) + inspection + documentation."""
+        costs = self.parameters.get("project_costs", {})
+        engineering = float(costs.get("engineering_hours", 0)) * float(
+            costs.get("engineering_rate_chf_per_h", 0)
+        )
+        commissioning = float(costs.get("commissioning_hours", 0)) * float(
+            costs.get("commissioning_rate_chf_per_h", 0)
+        )
+        return (
+            engineering
+            + commissioning
+            + float(costs.get("hygiene_inspection_chf", 0))
+            + float(costs.get("documentation_chf", 0))
+        )
 
 
 def _opt_float(value):

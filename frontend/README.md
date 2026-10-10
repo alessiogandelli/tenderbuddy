@@ -31,31 +31,31 @@ single port.
 
 ## Screens
 
-- **Archivio bandi** (`/`) — all tenders with Titolo, Descrizione, data and
-  Copertura; drag & drop upload; opens the detail.
-- **Dettaglio bando** (`/bandi/:id`) — header with editable title/description and
-  classification; the **"Da rivedere"** panel (every uncertain or missing Item);
-  coverage bar; the project quote (material, labour, Cost Baseline, Prezzo
-  indicativo); the three **Fascia di offerta** scenarios; the embedded PDF with
-  two-way highlight sync (row ↔ region); the Item table; manual Item editing.
-- **Catalogo** (`/catalogo`) — searchable Prodotti, Regole di produttività and
-  Parametri di progetto.
+- **Carica un bando** (`/`) — a single dropzone and a compact list of recent
+  bandi (Titolo, classificazione, prezzo indicativo).
+- **Workbench** (`/bandi/:id`) — a full-screen processing overlay while the
+  pipeline runs, then a two-pane review: the position list on the left (inline
+  editing, filter by "Da rivedere"/"Senza match", search, arrow-key navigation)
+  and the PDF on the right with two-way highlight sync that scrolls to the exact
+  region. A sticky header shows the live indicative price; a footer strip shows
+  the cost breakdown, the three bid scenarios and the AI usage badge.
 
 ## Layout
 
 ```
 src/
   api/          typed contract client + types (this side of the seam)
-  components/   Layout, ReviewPanel, ItemTable, SummaryPanel, BidRangeCards,
-                PdfViewer, PipelineProgress, ItemEditor, StatusPill, CoverageBar
-  pages/        ArchivePage, BandoPage, CatalogPage
-  lib/          formatting + Italian labels/glossary for the contract enums
+  components/   Layout, PositionRow, SummaryBar, ProcessingOverlay,
+                PdfViewer, AnimatedChf, StatusPill
+  pages/        LandingPage, WorkbenchPage
+  lib/          formatting + Italian labels for the contract enums
   styles.css    the design system (high contrast, readable, no framework)
 ```
 
 ## UX notes
 
-The people who must adopt this are not technical, so the interface is guided and
-explicit: statuses are words, not just colours; the "Da rivedere" panel makes
-uncertainty impossible to miss; domain terms carry a short glossary tooltip; and
-every price figure traces back to a page of the PDF.
+The people who must adopt this are not technical, so the interface is deliberately
+small: one dropzone, one workbench. Statuses are words, not just colours; the
+"Da rivedere" filter makes uncertainty impossible to miss; and every price figure
+traces back to a page of the PDF — clicking a row scrolls the document to the
+exact region it came from.

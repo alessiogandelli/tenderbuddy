@@ -13,6 +13,7 @@ from .enums import (
     Classification,
     ItemFlag,
     ItemStatus,
+    PageType,
     PipelineStatus,
     PipelineStep,
     PriceSource,
@@ -33,7 +34,11 @@ class Item(BaseModel):
     lv_id: str = ""
     system: Optional[str] = None
     source_page: Optional[int] = None
+    # Deprecated alias of name_bbox; kept so older readers keep working.
     source_bbox: Optional[List[float]] = None  # [x0, y0, x1, y1] in 0..1 page space
+    # The two regions of an LV row: the item name cell and the price cell.
+    name_bbox: Optional[List[float]] = None  # [x0, y0, x1, y1] in 0..1 page space
+    price_bbox: Optional[List[float]] = None  # [x0, y0, x1, y1] in 0..1 page space
 
     description_raw: Optional[str] = None
     description_normalized: Optional[str] = None
@@ -66,6 +71,10 @@ class PositionResult(BaseModel):
     match_confidence: Optional[float] = None
     review_required: bool = False
     status: ItemStatus
+    # Additive: the terms of the labour calculation, so the quote explains itself.
+    base_hours_per_unit: Optional[float] = None
+    hourly_rate_chf: Optional[float] = None
+    factor_product: Optional[float] = None
 
 
 class Summary(BaseModel):
@@ -74,6 +83,24 @@ class Summary(BaseModel):
     direct_cost_chf: float = 0.0
     cost_baseline_chf: float = 0.0
     indicative_selling_price_chf: float = 0.0
+    # Additive: project-level costs (engineering, commissioning, ...) and whether
+    # they are folded into ``direct_cost_chf``. Off by default (golden subset).
+    project_costs_chf: float = 0.0
+    include_project_costs: bool = False
+
+
+class Overview(BaseModel):
+    """Document-level reading of the whole tender, by Luna or a fallback.
+
+    Feeds the user (a plain-language panorama) and the matcher (which materials
+    and which labour the project actually needs).
+    """
+
+    summary: str = ""
+    systems: List[str] = Field(default_factory=list)
+    materials_needed: List[str] = Field(default_factory=list)
+    labour_needed: List[str] = Field(default_factory=list)
+    engine: str = "deterministic"
 
 
 class BidScenario(BaseModel):
@@ -99,15 +126,46 @@ class Coverage(BaseModel):
     non_priceable: int = 0
 
 
+class PageClassification(BaseModel):
+    """One page's detected type, decided before extraction (classify_pages)."""
+
+    page: int
+    type: PageType = PageType.OTHER
+    confidence: float = 0.0
+    reason: Optional[str] = None
+
+
+class Detection(BaseModel):
+    """One row the vision engine saw, kept or not.
+
+    ``kept`` is false when the row carried nothing in the measure/price cells (so
+    it is not an item). Discarded rows are still recorded so the UI can show
+    every box the engine drew and the detection quality can be judged.
+    """
+
+    page: int
+    description: Optional[str] = None
+    quantity: Optional[float] = None
+    unit: Optional[Unit] = None
+    name_bbox: Optional[List[float]] = None
+    price_bbox: Optional[List[float]] = None
+    kept: bool = False
+    reason: Optional[str] = None
+    lv_id: Optional[str] = None  # set when kept, links to the Item
+
+
 class PipelineState(BaseModel):
     step: PipelineStep = PipelineStep.READ
     status: PipelineStatus = PipelineStatus.PENDING
     updated_at: Optional[str] = None
     error: Optional[str] = None
+    # Additive: live progress for the UI's processing screen.
+    item_count: int = 0
+    message: Optional[str] = None
 
 
 class Profile(BaseModel):
-    catalog_version: str = "catalog.csv"
+    catalog_version: str = "catalog_extended.csv"
     productivity_version: str = "productivity.csv"
     parameters_version: str = "project_parameters.json"
 
@@ -131,11 +189,22 @@ class Bando(BaseModel):
     pipeline: PipelineState = Field(default_factory=PipelineState)
     profile: Profile = Field(default_factory=Profile)
     coverage: Coverage = Field(default_factory=Coverage)
+    # Additive: what type each page was classified as, before extraction.
+    page_types: List[PageClassification] = Field(default_factory=list)
+    # Additive: every row the vision engine saw (kept and discarded), for audit.
+    detections: List[Detection] = Field(default_factory=list)
 
     items: List[Item] = Field(default_factory=list)
     position_results: List[PositionResult] = Field(default_factory=list)
     summary: Summary = Field(default_factory=Summary)
     recommended_bid_range: Optional[BidRange] = None
+    # Additive: whole-document panorama from Luna (or the deterministic fallback).
+    overview: Optional[Overview] = None
+    # Additive: the pricing Parameters this Bando is priced with (a copy of
+    # project_parameters.json, editable by the estimator).
+    parameters: Optional[Dict[str, object]] = None
+    # Additive: AI usage/cost/latency for this run (None when deterministic).
+    usage: Optional[Dict[str, object]] = None
 
 
 class BandoSummary(BaseModel):
