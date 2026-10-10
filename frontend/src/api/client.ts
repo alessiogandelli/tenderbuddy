@@ -110,6 +110,24 @@ export const api = {
 
   parameters: () => request<Record<string, unknown>>("/parameters"),
 
+  /** The tender PDF with the selling price of the chosen positions written in. */
+  exportOfferPdf: async (id: string, body: { lv_ids: string[]; scenario: string | null }) => {
+    const response = await fetch(`${BASE}/api/bandi/${id}/export/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw { code: "export_failed", message: response.statusText } as ApiError;
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${id}_offer.pdf`;
+    return {
+      blob: await response.blob(),
+      filename,
+      written: Number(response.headers.get("X-Offer-Written") ?? 0),
+      skipped: Number(response.headers.get("X-Offer-Skipped") ?? 0),
+    };
+  },
+
   exportUrl: (id: string, format: "json" | "csv" = "json") =>
     `${BASE}/api/bandi/${id}/export?format=${format}`,
 

@@ -17,6 +17,8 @@ from .. import storage
 from ..domain.enums import Classification, ItemStatus, PipelineStatus, PipelineStep, PriceSource, Unit
 from ..domain.models import Bando, Item, Match
 from ..pipeline.extractors import default_reader
+from ..pipeline.offer_pdf import OfferEntry, fill_offer
+from ..pipeline.pricing import scenario_margin_pct, selling_markup
 from ..pipeline.pricing_db import get_pricing_db
 from ..pipeline.runner import recompute, run_pipeline
 from ..util import now_iso
@@ -41,6 +43,14 @@ class ItemPatch(BaseModel):
     confidence: Optional[float] = None
     # Explicit null clears it; omitted leaves it unchanged (same for product_id).
     manual_unit_price_chf: Optional[float] = None
+
+
+class OfferExport(BaseModel):
+    """Which positions go into the offer PDF, and at which bid scenario."""
+
+    lv_ids: List[str]
+    # A key of stretch_bid_optimization.scenario_margins_pct; None = target margin.
+    scenario: Optional[str] = None
 
 
 class ParametersPatch(BaseModel):
@@ -266,6 +276,58 @@ def get_pdf(bando_id: str) -> FileResponse:
     if not pdf.exists():
         raise HTTPException(status_code=404, detail="PDF not available")
     return FileResponse(pdf, media_type="application/pdf", filename="%s.pdf" % bando_id)
+
+
+@router.post("/{bando_id}/export/pdf")
+def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
+    """The tender PDF with the selling price of each chosen position written in
+    its price cell. Positions without a price or a price cell are skipped."""
+    bando = _get_or_404(bando_id)
+    pdf = storage.pdf_path(bando_id)
+    if not pdf.exists():
+        raise HTTPException(status_code=404, detail="PDF not available")
+    db = get_pricing_db().with_parameters(
+        bando.parameters or copy.deepcopy(get_pricing_db().parameters)
+    )
+    try:
+        markup = selling_markup(db, scenario_margin_pct(db, body.scenario))
+    except KeyError:
+        return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
+
+    items = {item.lv_id: item for item in bando.items}
+    results = {result.lv_id: result for result in bando.position_results}
+    entries = []
+    skipped = []
+    for lv_id in dict.fromkeys(body.lv_ids):
+        item = items.get(lv_id)
+        result = results.get(lv_id)
+        direct = result.direct_position_cost_chf if result else None
+        if item is None or direct is None or not item.price_bbox or not item.source_page:
+            skipped.append(lv_id)
+            continue
+        entries.append(
+            (
+                lv_id,
+                OfferEntry(
+                    page=item.source_page,
+                    price_bbox=item.price_bbox,
+                    amount_chf=round(direct * markup, 2),
+                ),
+            )
+        )
+
+    filled = fill_offer(pdf, entries)
+    stem = re.sub(r"\.pdf$", "", bando.source_file or bando_id, flags=re.I)
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem) or bando_id  # header-safe
+    return Response(
+        content=filled.pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="%s_offer.pdf"' % stem,
+            "X-Offer-Written": str(filled.written),
+            "X-Offer-Skipped": str(len(skipped) + len(filled.skipped)),
+        },
+    )
 
 
 @router.get("/{bando_id}/export")

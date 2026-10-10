@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Download } from "lucide-react";
-import { api } from "../api/client";
 import type { Bando } from "../api/types";
 import { itemState } from "../lib/flags";
 import { formatChf } from "../lib/format";
 import { changedFields } from "../lib/parameters";
 import { useI18n } from "../i18n";
+import { ExportDialog } from "./ExportDialog";
 
 /** The tender bar: its title, the three tabs (with what is left in each) and export. */
 export function TenderHeader({
@@ -17,6 +17,7 @@ export function TenderHeader({
   defaults: Record<string, unknown> | null;
 }) {
   const { t } = useI18n();
+  const [exporting, setExporting] = useState(false);
   const open = useMemo(() => {
     const results = new Map(bando.position_results.map((result) => [result.lv_id, result]));
     return bando.items.filter((item) => itemState(item, results.get(item.lv_id)) === "open").length;
@@ -54,9 +55,10 @@ export function TenderHeader({
           <span className="tabs__price">{formatChf(bando.summary.indicative_selling_price_chf)}</span>
         </NavLink>
       </nav>
-      <a className="btn btn--outline" href={api.exportUrl(bando.id, "csv")}>
+      <button type="button" className="btn btn--outline" onClick={() => setExporting(true)}>
         <Download size={16} aria-hidden /> {t("tender.export")}
-      </a>
+      </button>
+      <ExportDialog bando={bando} open={exporting} onClose={() => setExporting(false)} />
     </header>
   );
 }

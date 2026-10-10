@@ -144,6 +144,30 @@ def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
     )
 
 
+def selling_markup(db: PricingDB, margin_pct: float) -> float:
+    """Direct cost -> selling price, the same chain as the summary.
+
+    ``price = direct × (1 + overhead) × (1 + transport) / (1 − margin)``: one
+    position gets the overhead, transport and margin the whole tender gets.
+    Project costs and the bid rounding stay at tender level.
+    """
+    return (
+        (1.0 + db.overhead_pct / 100.0)
+        * (1.0 + db.transport_pct / 100.0)
+        / (1.0 - margin_pct / 100.0)
+    )
+
+
+def scenario_margin_pct(db: PricingDB, scenario: str | None) -> float:
+    """The margin of a bid scenario; ``None`` is the target margin."""
+    if scenario is None:
+        return db.target_margin_pct
+    margins = db.parameters["stretch_bid_optimization"]["scenario_margins_pct"]
+    if scenario not in margins:
+        raise KeyError(scenario)
+    return float(margins[scenario])
+
+
 def _ceil_to(value: float, step: int) -> float:
     if step <= 0:
         return round(value, 2)

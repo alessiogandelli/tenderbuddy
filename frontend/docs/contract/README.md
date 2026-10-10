@@ -324,6 +324,7 @@ All enum values are canonical **English**. They are the machine vocabulary share
 | PATCH | `/api/bandi/{id}/items/{lv_id}` | edit a position (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`, `manual_unit_price_chf`). An explicit `null` for `product_id` removes the match, for `manual_unit_price_chf` removes the hand price; omitted fields are unchanged | `Bando` |
 | GET | `/api/bandi/{id}/pdf` | the source PDF | `application/pdf` |
 | GET | `/api/bandi/{id}/export` | export the quote | JSON or CSV |
+| POST | `/api/bandi/{id}/export/pdf` | the **offer**: the tender PDF as received, with the selling price of each chosen position written in its `price_bbox` cell (right-aligned on the row's baseline). Body `{"lv_ids": [...], "scenario": "Target" \| null}`; the amount is `direct_position_cost_chf × (1 + overhead) × (1 + transport) / (1 − margin)`, the margin being the scenario's (`null` = target margin). Positions without a price or a price cell are skipped. Headers `X-Offer-Written` / `X-Offer-Skipped` give the counts | `application/pdf` |
 | GET | `/api/catalog` | Products | `Product[]` |
 | GET | `/api/productivity` | Productivity rules | `ProductivityRule[]` |
 | GET | `/api/parameters` | project Parameters | `project_parameters` object |

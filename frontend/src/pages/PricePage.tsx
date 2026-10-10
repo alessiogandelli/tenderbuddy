@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Shield, SlidersHorizontal, Swords, Target, type LucideIcon } from "lucide-react";
 import { AnimatedChf } from "../components/AnimatedChf";
 import { ITEM_STATES, itemState, type ItemState } from "../lib/flags";
+import { readScenario, saveScenario } from "../lib/scenario";
 import { formatChf, formatNumber, formatPercent } from "../lib/format";
 import { useI18n } from "../i18n";
 import { useTender } from "./tenderContext";
@@ -12,7 +13,6 @@ const SCENARIO_ICON: Record<string, LucideIcon> = {
   Target,
   Conservative: Shield,
 };
-const SCENARIO_KEY = "tenderbuddy.scenario";
 
 type Slice = { key: string; amount: number; note?: string };
 
@@ -26,21 +26,11 @@ export function PricePage() {
   const summary = bando.summary;
   const params = bando.parameters;
   const scenarios = bando.recommended_bid_range?.scenarios ?? [];
-  const [scenario, setScenario] = useState<string>(() => {
-    try {
-      return window.localStorage.getItem(`${SCENARIO_KEY}.${bando.id}`) ?? "Target";
-    } catch {
-      return "Target";
-    }
-  });
+  const [scenario, setScenario] = useState<string>(() => readScenario(bando.id));
   const chosen = scenarios.find((entry) => entry.scenario === scenario) ?? scenarios[1] ?? scenarios[0];
   const choose = (name: string) => {
     setScenario(name);
-    try {
-      window.localStorage.setItem(`${SCENARIO_KEY}.${bando.id}`, name);
-    } catch {
-      /* ignore */
-    }
+    saveScenario(bando.id, name);
   };
 
   const coverage = useMemo(() => {
