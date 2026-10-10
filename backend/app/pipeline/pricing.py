@@ -51,6 +51,9 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
         review_required=item.status not in (ItemStatus.CALCULATED, ItemStatus.OUT_OF_SCOPE),
     )
 
+    if item.offer_price_chf is not None:
+        return _price_offer(item, base, db)
+
     if item.manual_unit_price_chf is not None and item.quantity is not None:
         return _price_manual(item, base)
 
@@ -120,6 +123,49 @@ def _price_manual(item: Item, base: PositionResult) -> PositionResult:
     base.direct_position_cost_chf = round(direct, 2)
     base.price_source = PriceSource.MANUAL
     return base
+
+
+def _price_offer(item: Item, base: PositionResult, db: PricingDB) -> PositionResult:
+    """A hand-typed offer total: its direct-cost share is that total at the
+    target margin, so the summary, baseline and bid range stay consistent."""
+    direct = float(item.offer_price_chf) / selling_markup(db, db.target_margin_pct)
+    base.matched_product_id = item.match.product_id if item.match else None
+    base.net_unit_cost_chf = round(direct / item.quantity, 4) if item.quantity else None
+    base.material_cost_chf = round(direct, 2)
+    base.adjusted_install_hours = 0.0
+    base.labour_cost_chf = 0.0
+    base.direct_position_cost_chf = round(direct, 2)
+    base.price_source = PriceSource.MANUAL
+    return base
+
+
+def offer_prices(item: Item, result: PositionResult, db: PricingDB) -> dict:
+    """What the offer prints for this position, per bid scenario."""
+    names = db.parameters["stretch_bid_optimization"]["scenario_names"]
+    if item.offer_price_chf is not None:
+        return {name: round(float(item.offer_price_chf), 2) for name in names}
+    if result.direct_position_cost_chf is None:
+        return {}
+    return {
+        name: round(
+            result.direct_position_cost_chf
+            * selling_markup(db, scenario_margin_pct(db, name)),
+            2,
+        )
+        for name in names
+    }
+
+
+def offer_amount(
+    item: Item, result: PositionResult, db: PricingDB, scenario: str | None
+) -> float | None:
+    """The printed amount for one scenario; ``None`` scenario = target margin."""
+    if item.offer_price_chf is not None:
+        return round(float(item.offer_price_chf), 2)
+    if result.direct_position_cost_chf is None:
+        return None
+    margin = scenario_margin_pct(db, scenario)
+    return round(result.direct_position_cost_chf * selling_markup(db, margin), 2)
 
 
 def compute_summary(results: List[PositionResult], db: PricingDB) -> Summary:
@@ -241,6 +287,15 @@ def reconcile_item(item: Item, db: PricingDB) -> Item:
 
     flags = [flag for flag in item.flags if flag not in resolved]
 
+    if item.offer_price_chf is not None:
+        # The estimator wrote the offer total: nothing is left to match.
+        item.flags = [
+            flag for flag in flags
+            if flag not in (ItemFlag.NO_MATCH, ItemFlag.LOW_CONFIDENCE_MATCH)
+        ]
+        item.status = ItemStatus.CALCULATED
+        return item
+
     if item.manual_unit_price_chf is not None and item.quantity is not None:
         # A human priced it: nothing is left to match.
         item.flags = [
@@ -289,4 +344,9 @@ def reconcile_item(item: Item, db: PricingDB) -> Item:
 
 
 def build_position_results(items: List[Item], db: PricingDB) -> List[PositionResult]:
-    return [price_item(item, db) for item in items]
+    results = []
+    for item in items:
+        result = price_item(item, db)
+        result.offer_prices_chf = offer_prices(item, result, db)
+        results.append(result)
+    return results

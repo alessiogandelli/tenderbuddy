@@ -26,9 +26,10 @@ export const CHECK_FLAGS: ItemFlag[] = [
 
 /**
  * Where an item stands, in the four words the review list uses:
- * - `priced`: priced from the catalogue, nothing to check;
- * - `manual`: priced with a unit price typed by hand;
- * - `check`: priced, but the match is uncertain or needs a supplier quote;
+ * - `priced`: priced from the catalogue with nothing to check, or confirmed;
+ * - `manual`: priced by hand (a unit cost, or the offer total itself);
+ * - `check`: priced, but the match is uncertain or needs a supplier quote,
+ *   and the estimator has not confirmed it yet;
  * - `open`: no price yet (no catalogue product, or no quantity).
  */
 export type ItemState = "priced" | "manual" | "check" | "open";
@@ -36,8 +37,11 @@ export type ItemState = "priced" | "manual" | "check" | "open";
 export const ITEM_STATES: ItemState[] = ["open", "check", "priced", "manual"];
 
 export function itemState(item: Item, result: PositionResult | undefined): ItemState {
+  if (item.offer_price_chf != null) return "manual";
   if (result?.direct_position_cost_chf == null) return "open";
   if (result.price_source === "manual") return "manual";
+  // Confirmed by the estimator: whatever made it uncertain, the price is final.
+  if (item.price_confirmed) return "priced";
   if (item.status === "supplier_quote_required") return "check";
   if (item.flags.some((flag) => CHECK_FLAGS.includes(flag))) return "check";
   return "priced";

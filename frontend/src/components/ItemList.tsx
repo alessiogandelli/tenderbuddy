@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search, X } from "lucide-react";
 import type { Item, PageType, PositionResult, Product, ProductivityRule, ProjectParameters } from "../api/types";
 import type { ItemState } from "../lib/flags";
@@ -16,6 +17,10 @@ const inFilter = (filter: Filter, state: ItemState) =>
   (filter === "priced" ? state === "priced" || state === "manual" : state === filter);
 
 export type SelectSource = "list" | "pdf";
+
+/** A cost component the list can be narrowed to (from the price page). */
+type Component = "material" | "labour";
+const COMPONENTS: Component[] = ["material", "labour"];
 
 /**
  * Every item read from the tender, one compact line each (name, quantity,
@@ -36,6 +41,7 @@ export function ItemList({
   onShowInPdf,
   onSave,
   headerAction,
+  scenario,
 }: {
   items: Item[];
   results: Map<string, PositionResult>;
@@ -51,9 +57,35 @@ export function ItemList({
   onSave: (lvId: string, patch: ItemPatch) => Promise<void>;
   /** Extra control in the list header (e.g. the panel collapse button). */
   headerAction?: ReactNode;
+  /** The bid scenario whose offer prices are shown. */
+  scenario: string;
 }) {
   const { t } = useI18n();
-  const [filter, setFilter] = useState<Filter>("all");
+  // Status and component filters live in the URL (?status=check&component=
+  // material), so the price page can open the list already filtered.
+  const [params, setParams] = useSearchParams();
+  const statusParam = params.get("status") as Filter | null;
+  const filter: Filter = statusParam && FILTERS.includes(statusParam) ? statusParam : "all";
+  const componentParam = params.get("component") as Component | null;
+  const component = componentParam && COMPONENTS.includes(componentParam) ? componentParam : null;
+  const setParam = (key: string, value: string | null) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const setFilter = (key: Filter) => setParam("status", key === "all" ? null : key);
+  // Items that carry the component at all (a supplier package has no labour).
+  const inComponent = (item: Item) => {
+    if (!component) return true;
+    const result = results.get(item.lv_id);
+    const amount = component === "material" ? result?.material_cost_chf : result?.labour_cost_chf;
+    return (amount ?? 0) > 0;
+  };
   const [query, setQuery] = useState("");
   const rowRefs = useRef<Map<string, HTMLLIElement>>(new Map());
   const cardRef = useRef<ItemCardHandle | null>(null);
@@ -62,16 +94,19 @@ export function ItemList({
   const counts = useMemo(() => {
     const out: Record<Filter, number> = { all: 0, open: 0, check: 0, priced: 0 };
     for (const item of items) {
+      if (!inComponent(item)) continue;
       const state = states.get(item.lv_id) ?? "open";
       for (const key of FILTERS) if (inFilter(key, state)) out[key] += 1;
     }
     return out;
-  }, [items, states]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, states, results, component]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return items.filter((item) => {
       if (!inFilter(filter, states.get(item.lv_id) ?? "open")) return false;
+      if (!inComponent(item)) return false;
       if (!needle) return true;
       const product = item.match ? productsById.get(item.match.product_id) : undefined;
       return `${item.lv_id} ${posNumber(item) ?? ""} ${item.description_raw ?? ""} ${
@@ -80,7 +115,8 @@ export function ItemList({
         .toLowerCase()
         .includes(needle);
     });
-  }, [items, states, filter, query, productsById]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, states, results, filter, component, query, productsById]);
 
   const groups = useMemo(() => {
     const out: { system: string; items: Item[] }[] = [];
@@ -176,6 +212,17 @@ export function ItemList({
               <span className="filter__count">{counts[key]}</span>
             </button>
           ))}
+          {component && (
+            <button
+              type="button"
+              className="filter filter--component is-active"
+              title={t("items.clearComponent")}
+              onClick={() => setParam("component", null)}
+            >
+              {t(`items.component.${component}`)}
+              <X size={13} aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 
@@ -244,6 +291,7 @@ export function ItemList({
                         rules={ruleList}
                         pageType={item.source_page ? types.get(item.source_page) : undefined}
                         parameters={parameters}
+                        scenario={scenario}
                         hasPrev={selectedIndex > 0}
                         hasNext={selectedIndex >= 0 && selectedIndex < visible.length - 1}
                         onPrev={() => move(-1)}

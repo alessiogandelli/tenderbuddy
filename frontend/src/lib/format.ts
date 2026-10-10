@@ -50,3 +50,22 @@ export function formatDate(iso: string | null | undefined): string {
     year: "numeric",
   }).format(date);
 }
+
+/**
+ * An amount as the offer prints it, whatever the UI language: Swiss style with
+ * an apostrophe and two decimals (12'345.60), like the exported PDF.
+ */
+export function formatOffer(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  const [whole, cents] = value.toFixed(2).split(".");
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, "'")}.${cents}`;
+}
+
+/** A short amount for tight labels: 860 · 8.5k · 137k · 1'126k (locale-aware). */
+export function formatCompact(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const abs = Math.abs(value);
+  if (abs < 1000) return formatNumber(value, 0);
+  const thousands = value / 1000;
+  return `${numberFormat({ maximumFractionDigits: abs < 100_000 ? 1 : 0 }).format(thousands)}k`;
+}

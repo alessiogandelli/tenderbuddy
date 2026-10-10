@@ -12,9 +12,13 @@ import { ExportDialog } from "./ExportDialog";
 export function TenderHeader({
   bando,
   defaults,
+  scenario,
+  setScenario,
 }: {
   bando: Bando;
   defaults: Record<string, unknown> | null;
+  scenario: string;
+  setScenario: (scenario: string) => void;
 }) {
   const { t } = useI18n();
   const [exporting, setExporting] = useState(false);
@@ -23,6 +27,10 @@ export function TenderHeader({
     return bando.items.filter((item) => itemState(item, results.get(item.lv_id)) === "open").length;
   }, [bando]);
   const changed = changedFields(bando.parameters, defaults).length;
+  const scenarios = bando.recommended_bid_range?.scenarios ?? [];
+  const offer =
+    (scenarios.find((entry) => entry.scenario === scenario) ?? scenarios[1] ?? scenarios[0])?.bid_price_chf ??
+    bando.summary.indicative_selling_price_chf;
   const base = `/bandi/${bando.id}`;
   const tab = ({ isActive }: { isActive: boolean }) => `tabs__tab ${isActive ? "is-active" : ""}`;
 
@@ -52,13 +60,20 @@ export function TenderHeader({
         </NavLink>
         <NavLink to={`${base}/price`} className={tab}>
           {t("tender.tabPrice")}
-          <span className="tabs__price">{formatChf(bando.summary.indicative_selling_price_chf)}</span>
+          {/* Always the offer of the chosen strategy, the same as the price page. */}
+          <span className="tabs__price">{formatChf(offer)}</span>
         </NavLink>
       </nav>
       <button type="button" className="btn btn--outline" onClick={() => setExporting(true)}>
         <Download size={16} aria-hidden /> {t("tender.export")}
       </button>
-      <ExportDialog bando={bando} open={exporting} onClose={() => setExporting(false)} />
+      <ExportDialog
+        bando={bando}
+        open={exporting}
+        scenario={scenario}
+        onScenario={setScenario}
+        onClose={() => setExporting(false)}
+      />
     </header>
   );
 }

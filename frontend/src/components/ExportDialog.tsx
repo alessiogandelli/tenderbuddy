@@ -4,7 +4,6 @@ import { api } from "../api/client";
 import type { Bando } from "../api/types";
 import { itemState, type ItemState } from "../lib/flags";
 import { formatNumber } from "../lib/format";
-import { readScenario, saveScenario } from "../lib/scenario";
 import { useI18n } from "../i18n";
 
 /**
@@ -13,11 +12,23 @@ import { useI18n } from "../i18n";
  * always go in, positions without a price never do, and the ones still to check
  * only when chosen here.
  */
-export function ExportDialog({ bando, open, onClose }: { bando: Bando; open: boolean; onClose: () => void }) {
+export function ExportDialog({
+  bando,
+  open,
+  scenario,
+  onScenario,
+  onClose,
+}: {
+  bando: Bando;
+  open: boolean;
+  /** The tender's chosen strategy; changing it here changes it everywhere. */
+  scenario: string;
+  onScenario: (scenario: string) => void;
+  onClose: () => void;
+}) {
   const { t } = useI18n();
   const ref = useRef<HTMLDialogElement | null>(null);
   const scenarios = bando.recommended_bid_range?.scenarios ?? [];
-  const [scenario, setScenario] = useState(() => readScenario(bando.id));
   const [includeCheck, setIncludeCheck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ written: number; skipped: number } | null>(null);
@@ -27,7 +38,6 @@ export function ExportDialog({ bando, open, onClose }: { bando: Bando; open: boo
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
-      setScenario(readScenario(bando.id));
       setDone(null);
       setError(null);
       dialog.showModal();
@@ -118,8 +128,7 @@ export function ExportDialog({ bando, open, onClose }: { bando: Bando; open: boo
                     className="sr-only"
                     checked={entry.scenario === scenario}
                     onChange={() => {
-                      setScenario(entry.scenario);
-                      saveScenario(bando.id, entry.scenario);
+                      onScenario(entry.scenario);
                       setDone(null);
                     }}
                   />

@@ -51,6 +51,14 @@ class Item(BaseModel):
     # Additive: an all-in direct unit cost typed by the estimator. When set it
     # prices the Item (as material, no waste, no labour) and wins over the match.
     manual_unit_price_chf: Optional[float] = None
+    # Additive: the position's total as it will be printed in the offer (the
+    # Betrag cell), typed by the estimator. Wins over every computed price and
+    # does not move with the bid scenario.
+    offer_price_chf: Optional[float] = None
+    # Additive: the estimator confirmed this position's price; a price that
+    # would otherwise need a check (uncertain match, supplier quote) counts as
+    # final. Reset whenever the price changes.
+    price_confirmed: bool = False
 
     status: ItemStatus = ItemStatus.REVIEW_REQUIRED
     flags: List[ItemFlag] = Field(default_factory=list)
@@ -78,6 +86,10 @@ class PositionResult(BaseModel):
     base_hours_per_unit: Optional[float] = None
     hourly_rate_chf: Optional[float] = None
     factor_product: Optional[float] = None
+    # Additive: the selling price printed in the offer for this position, per
+    # bid scenario (direct cost × overhead × transport / (1 − scenario margin)),
+    # or the hand-typed offer price for every scenario. Empty when unpriced.
+    offer_prices_chf: Dict[str, float] = Field(default_factory=dict)
 
 
 class Summary(BaseModel):

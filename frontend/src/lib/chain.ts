@@ -8,7 +8,7 @@ export type ChainKey = "text" | "product" | "labour" | "price";
 export type NodeStatus = "done" | "missing" | "check" | "replaced";
 
 /** What the "Next step" button does. */
-export type NextAction = "quantity" | "product" | "confirm" | "labour" | "price" | "supplier";
+export type NextAction = "quantity" | "product" | "confirmPrice" | "labour" | "price";
 
 export interface ChainNode {
   key: ChainKey;
@@ -27,12 +27,16 @@ export function pricingChain(
   product: Product | undefined,
   rule: ProductivityRule | undefined,
 ): ChainNode[] {
-  const manual = item.manual_unit_price_chf != null;
+  // Priced by hand: a unit cost, or the offer total itself.
+  const manual = item.manual_unit_price_chf != null || item.offer_price_chf != null;
   const priced = result?.direct_position_cost_chf != null;
 
   const text: ChainNode =
     item.quantity == null
-      ? { key: "text", status: "missing", action: "quantity" }
+      ? // A typed offer total does not need the quantity to be printed.
+        item.offer_price_chf != null
+        ? { key: "text", status: "check" }
+        : { key: "text", status: "missing", action: "quantity" }
       : item.flags.some((flag) => TEXT_CHECK_FLAGS.includes(flag))
         ? { key: "text", status: "check" }
         : { key: "text", status: "done" };
@@ -42,16 +46,20 @@ export function pricingChain(
   else if (!item.match || !product) productNode = { key: "product", status: "missing", action: "product" };
   // Matched, but the catalogue has no price for it: a price must be typed.
   else if (product.net_cost_chf == null) productNode = { key: "product", status: "missing", action: "price" };
+  // Confirmed by the estimator: the doubt below no longer holds the price back.
+  else if (item.price_confirmed) productNode = { key: "product", status: "done" };
   else if (item.status === "supplier_quote_required")
-    productNode = { key: "product", status: "check", action: "supplier" };
+    productNode = { key: "product", status: "check", action: "confirmPrice" };
   else if (item.flags.some((flag) => PRODUCT_CHECK_FLAGS.includes(flag)))
-    productNode = { key: "product", status: "check", action: "confirm" };
+    productNode = { key: "product", status: "check", action: "confirmPrice" };
   else productNode = { key: "product", status: "done" };
 
   let labour: ChainNode;
   if (manual) labour = { key: "labour", status: "replaced" };
   // No product yet: labour comes from the product, so it waits on it.
   else if (!item.match) labour = { key: "labour", status: "missing", action: "product" };
+  // A supplier package is quoted labour included: no rule of ours is needed.
+  else if (!rule && product?.supplier_quote_required) labour = { key: "labour", status: "done" };
   else if (!rule) labour = { key: "labour", status: "missing", action: "labour" };
   else labour = { key: "labour", status: "done" };
 

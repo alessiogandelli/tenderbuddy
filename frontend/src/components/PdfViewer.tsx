@@ -17,9 +17,11 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight, Minus, MoveHorizontal, Plus, SquareDashed } from "lucide-react";
 import type { Item, PageType, PositionResult } from "../api/types";
 import type { ItemState } from "../lib/flags";
-import { formatChf } from "../lib/format";
 import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
+import { cellAnchor, readTextRuns, type CellAnchor, type TextRun } from "../lib/pageText";
 import { useI18n } from "../i18n";
+import type { ItemPatch } from "./ItemCard";
+import { PriceCell } from "./PriceCell";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -69,7 +71,13 @@ interface PageProps {
   selectedId: string | null;
   showBoxes: boolean;
   root: HTMLDivElement | null;
+  scenario: string;
+  scenarioLabel: string;
+  /** The position whose price is being edited on the page, if any. */
+  editingId: string | null;
   onSelect: (lvId: string) => void;
+  onEdit: (lvId: string | null) => void;
+  onSavePrice: (lvId: string, patch: ItemPatch) => Promise<void>;
   register: (page: number, node: HTMLDivElement | null) => void;
 }
 
@@ -85,7 +93,12 @@ const PdfPage = memo(function PdfPage({
   selectedId,
   showBoxes,
   root,
+  scenario,
+  scenarioLabel,
+  editingId,
   onSelect,
+  onEdit,
+  onSavePrice,
   register,
 }: PageProps) {
   const { t } = useI18n();
@@ -93,6 +106,8 @@ const PdfPage = memo(function PdfPage({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [near, setNear] = useState(false);
   const [ownSize, setOwnSize] = useState<Size | null>(null);
+  // The page's own text, read once, to put each price on its row's baseline.
+  const [text, setText] = useState<{ runs: TextRun[]; reach: number } | null>(null);
   const size = ownSize ?? baseSize;
 
   // Render only the pages near the viewport, and free the far ones: a tender
@@ -153,6 +168,30 @@ const PdfPage = memo(function PdfPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [near, renderScale, doc, pageNumber]);
 
+  useEffect(() => {
+    if (!near || text) return;
+    let cancelled = false;
+    doc
+      .getPage(pageNumber)
+      .then(readTextRuns)
+      .then((read) => {
+        if (!cancelled) setText(read);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [near, text, doc, pageNumber]);
+
+  const anchors = useMemo(() => {
+    const map = new Map<string, CellAnchor>();
+    if (!text) return map;
+    for (const item of items) {
+      if (item.price_bbox) map.set(item.lv_id, cellAnchor(item.price_bbox, text.runs, text.reach));
+    }
+    return map;
+  }, [items, text]);
+
   const nameGroups = useMemo(() => {
     const map = new Map<string, Item[]>();
     for (const item of items) {
@@ -210,25 +249,32 @@ const PdfPage = memo(function PdfPage({
               </button>
             );
           })}
-        {showBoxes &&
-          items.map((item) => {
-            if (!item.price_bbox) return null;
-            const active = item.lv_id === selectedId;
-            const state = states.get(item.lv_id) ?? "open";
-            const cost = results.get(item.lv_id)?.direct_position_cost_chf ?? null;
-            return (
-              <button
-                key={`p-${item.lv_id}`}
-                type="button"
-                className={`hl hl--price hl--${state} ${active ? "is-active" : ""}`}
-                style={rectOf(item.price_bbox)}
-                aria-label={t("pdf.priceAria", { id: item.lv_id })}
-                onClick={() => onSelect(item.lv_id)}
-              >
-                <span className="hl__tag">{cost != null ? formatChf(cost) : t("pdf.noPrice")}</span>
-              </button>
-            );
-          })}
+        {/* The prices are the offer's content: always shown, like the print. */}
+        {items.map((item) => {
+          if (!item.price_bbox) return null;
+          const amount =
+            item.offer_price_chf ?? results.get(item.lv_id)?.offer_prices_chf?.[scenario] ?? null;
+          return (
+            <PriceCell
+              key={`p-${item.lv_id}`}
+              item={item}
+              state={states.get(item.lv_id) ?? "open"}
+              amount={amount}
+              scenarioLabel={scenarioLabel}
+              style={rectOf(item.price_bbox)}
+              anchor={anchors.get(item.lv_id) ?? null}
+              active={item.lv_id === selectedId}
+              editing={item.lv_id === editingId}
+              outlined={showBoxes}
+              onOpen={() => {
+                onSelect(item.lv_id);
+                onEdit(item.lv_id);
+              }}
+              onClose={() => onEdit(null)}
+              onSave={(patch) => onSavePrice(item.lv_id, patch)}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -250,6 +296,9 @@ export const PdfViewer = forwardRef<
     onPageCount: (count: number) => void;
     /** Controls shown first in the toolbar (e.g. the panel collapse button). */
     leading?: ReactNode;
+    /** The bid scenario whose offer prices are written in the price cells. */
+    scenario: string;
+    onSavePrice: (lvId: string, patch: ItemPatch) => Promise<void>;
   }
 >(function PdfViewer(
   {
@@ -264,6 +313,8 @@ export const PdfViewer = forwardRef<
     onPageChange,
     onPageCount,
     leading,
+    scenario,
+    onSavePrice,
   },
   ref,
 ) {
@@ -277,6 +328,8 @@ export const PdfViewer = forwardRef<
   const [current, setCurrent] = useState(1);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const scenarioLabel = t(`price.scenario.${scenario}`);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   useEffect(() => {
@@ -545,7 +598,12 @@ export const PdfViewer = forwardRef<
                 selectedId={selectedId}
                 showBoxes={showBoxes}
                 root={scroller}
+                scenario={scenario}
+                scenarioLabel={scenarioLabel}
+                editingId={editingId}
                 onSelect={onSelect}
+                onEdit={setEditingId}
+                onSavePrice={onSavePrice}
                 register={register}
               />
             ))}

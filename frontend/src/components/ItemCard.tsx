@@ -33,7 +33,7 @@ import type {
 } from "../api/types";
 import { CHAIN_ORDER, nextAction, pricingChain, type ChainKey, type NextAction, type NodeStatus } from "../lib/chain";
 import type { ItemState } from "../lib/flags";
-import { formatChf, formatNumber } from "../lib/format";
+import { formatChf, formatNumber, formatOffer } from "../lib/format";
 import { itemName, posNumber, searchProducts, suggestedProducts } from "../lib/items";
 import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
 import { useI18n } from "../i18n";
@@ -50,17 +50,18 @@ export interface ItemPatch {
   install_code?: string;
   confidence?: number;
   manual_unit_price_chf?: number | null;
+  offer_price_chf?: number | null;
+  price_confirmed?: boolean;
 }
 
 type Mode = "view" | "quantity" | "pick" | "labour" | "price";
 
-const MODE_OF: Record<NextAction, Mode> = {
+// Next actions that open a form; `confirmPrice` acts at once instead.
+const MODE_OF: Record<Exclude<NextAction, "confirmPrice">, Mode> = {
   quantity: "quantity",
   product: "pick",
-  confirm: "pick",
   labour: "labour",
   price: "price",
-  supplier: "price",
 };
 const SECTION_OF: Record<Mode, ChainKey | null> = {
   view: null,
@@ -289,6 +290,8 @@ export const ItemCard = forwardRef<
     rules: ProductivityRule[];
     pageType: PageType | undefined;
     parameters: ProjectParameters | null;
+    /** The bid scenario whose offer price is shown. */
+    scenario: string;
     hasPrev: boolean;
     hasNext: boolean;
     onPrev: () => void;
@@ -308,6 +311,7 @@ export const ItemCard = forwardRef<
     rules,
     pageType,
     parameters,
+    scenario,
     hasPrev,
     hasNext,
     onPrev,
@@ -340,7 +344,11 @@ export const ItemCard = forwardRef<
   const chain = pricingChain(item, result, product, rule);
   const next = nextAction(chain);
   const blocked = chain.some((node) => node.status === "missing");
-  const manual = item.manual_unit_price_chf != null;
+  const typedOffer = item.offer_price_chf != null;
+  const manual = item.manual_unit_price_chf != null || typedOffer;
+  // What the offer prints for this position in the chosen scenario.
+  const offer = item.offer_price_chf ?? result?.offer_prices_chf?.[scenario] ?? null;
+  const offerTone = state === "open" ? "open" : state === "check" ? "check" : "final";
 
   const scrollTo = (key: ChainKey) =>
     sectionRefs.current[key]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -348,7 +356,14 @@ export const ItemCard = forwardRef<
   const open = (nextMode: Mode) => {
     setError(null);
     if (nextMode === "price") {
-      setPriceDraft(item.manual_unit_price_chf != null ? String(item.manual_unit_price_chf) : "");
+      // A typed offer total is edited as a total; otherwise a unit cost.
+      setPriceDraft(
+        item.offer_price_chf != null
+          ? String(item.offer_price_chf)
+          : item.manual_unit_price_chf != null
+            ? String(item.manual_unit_price_chf)
+            : "",
+      );
     }
     if (nextMode === "quantity" || nextMode === "price") {
       setQtyDraft(item.quantity != null ? String(item.quantity) : "");
@@ -381,8 +396,12 @@ export const ItemCard = forwardRef<
   const submitPrice = (event: FormEvent) => {
     event.preventDefault();
     const price = parseNumber(priceDraft);
-    const quantity = item.quantity ?? parseNumber(qtyDraft);
     if (price == null || price < 0) return setError(t("card.priceInvalid"));
+    if (item.offer_price_chf != null) {
+      void save({ offer_price_chf: price, price_confirmed: true });
+      return;
+    }
+    const quantity = item.quantity ?? parseNumber(qtyDraft);
     if (quantity == null || quantity <= 0) return setError(t("card.quantityInvalid"));
     void save({ manual_unit_price_chf: price, ...(item.quantity == null ? { quantity, unit: unitDraft } : {}) });
   };
@@ -569,6 +588,13 @@ export const ItemCard = forwardRef<
         </div>
 
         <p className="fx" aria-label={t("card.formulaAria")}>
+          {typedOffer ? (
+            <>
+              <Term value={formatChf(item.offer_price_chf, true)} title={t("card.fx.offer")} />
+              <span className="fx__note">{t("card.fx.typedOffer")}</span>
+            </>
+          ) : (
+          <>
           <Term value={qty} title={t("card.fx.qty")} />
           <span className="fx__op">×</span>
           {manual ? (
@@ -597,6 +623,8 @@ export const ItemCard = forwardRef<
               <span className="fx__op">)</span>
             </>
           )}
+          </>
+          )}
           <span className="fx__op">=</span>
           <Term value={direct != null ? formatChf(direct, true) : null} title={t("card.fx.direct")} />
         </p>
@@ -621,7 +649,14 @@ export const ItemCard = forwardRef<
             })}
           </ol>
           {next && mode === "view" && (
-            <button type="button" className="btn btn--primary btn--sm chead__next" onClick={() => open(MODE_OF[next.action])}>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm chead__next"
+              disabled={busy}
+              onClick={() =>
+                next.action === "confirmPrice" ? void save({ price_confirmed: true }) : open(MODE_OF[next.action])
+              }
+            >
               {t(`card.nextStep.${next.action}`)} <ArrowRight size={14} aria-hidden />
             </button>
           )}
@@ -758,7 +793,9 @@ export const ItemCard = forwardRef<
             <p className="csec__empty">{t("card.labourNeedsProduct")}</p>
           ) : !rule ? (
             <p className="csec__empty">
-              {t("card.noLabourRule", { code: item.match.install_code ?? "—" })}
+              {product?.supplier_quote_required
+                ? t("card.labourBySupplier")
+                : t("card.noLabourRule", { code: item.match.install_code ?? "—" })}
             </p>
           ) : (
             <>
@@ -817,7 +854,7 @@ export const ItemCard = forwardRef<
           "price",
           mode === "price" ? (
             <form className="inline-form" onSubmit={submitPrice}>
-              {item.quantity == null && (
+              {item.quantity == null && item.offer_price_chf == null && (
                 <>
                   <input
                     className="input input--num"
@@ -849,7 +886,7 @@ export const ItemCard = forwardRef<
                   className="input input--num"
                   value={priceDraft}
                   inputMode="decimal"
-                  aria-label={t("card.unitPrice")}
+                  aria-label={item.offer_price_chf != null ? t("card.typedOffer") : t("card.unitPrice")}
                   onChange={(event) => setPriceDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
@@ -858,7 +895,7 @@ export const ItemCard = forwardRef<
                     }
                   }}
                 />
-                <span>/ {item.unit ?? unitDraft}</span>
+                {item.offer_price_chf == null && <span>/ {item.unit ?? unitDraft}</span>}
               </span>
               <button type="submit" className="btn btn--primary btn--sm" disabled={busy}>
                 {t("common.save")}
@@ -866,12 +903,19 @@ export const ItemCard = forwardRef<
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setMode("view")}>
                 {t("common.cancel")}
               </button>
-              <p className="inline-form__hint">{t("card.manualHint")}</p>
+              <p className="inline-form__hint">
+                {item.offer_price_chf != null ? t("priceCell.hint.typed") : t("card.manualHint")}
+              </p>
             </form>
           ) : (
             <>
               <dl className="calc">
-                {manual ? (
+                {typedOffer ? (
+                  <div className="calc__row">
+                    <dt>{t("card.typedOffer")}</dt>
+                    <dd>{formatChf(item.offer_price_chf, true)}</dd>
+                  </div>
+                ) : manual ? (
                   <div className="calc__row">
                     <dt>{t("card.manualPrice")}</dt>
                     <dd>
@@ -895,6 +939,23 @@ export const ItemCard = forwardRef<
                   <dd className={direct == null ? "warn-text" : ""}>{direct != null ? formatChf(direct, true) : "—"}</dd>
                 </div>
               </dl>
+              <div className={`offerline offerline--${offerTone}`}>
+                <span className="offerline__label">
+                  {t("card.inOffer", { scenario: t(`price.scenario.${scenario}`) })}
+                  <span className="offerline__state">{t(`card.offerState.${offerTone}`)}</span>
+                </span>
+                <strong className="offerline__amount">{offer != null ? formatOffer(offer) : "—"}</strong>
+                {item.price_confirmed && state === "priced" && (
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    disabled={busy}
+                    onClick={() => void save({ price_confirmed: false })}
+                  >
+                    {t("card.unconfirm")}
+                  </button>
+                )}
+              </div>
               {!blocked && (
                 <div className="csec__actions">
                   <button type="button" className="btn btn--ghost btn--sm" onClick={() => open("price")}>
@@ -905,7 +966,9 @@ export const ItemCard = forwardRef<
                       type="button"
                       className="btn btn--ghost btn--sm"
                       disabled={busy}
-                      onClick={() => void save({ manual_unit_price_chf: null })}
+                      onClick={() =>
+                        void save(typedOffer ? { offer_price_chf: null } : { manual_unit_price_chf: null })
+                      }
                     >
                       <Trash2 size={13} aria-hidden /> {t("card.removePrice")}
                     </button>

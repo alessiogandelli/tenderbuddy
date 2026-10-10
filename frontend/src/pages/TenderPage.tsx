@@ -7,6 +7,7 @@ import { TapeMorph, type MorphStart } from "../components/TapeMorph";
 import { TenderHeader } from "../components/TenderHeader";
 import { PIPELINE_ORDER } from "../lib/flags";
 import { useI18n } from "../i18n";
+import { readScenario, saveScenario } from "../lib/scenario";
 import type { TenderContext } from "./tenderContext";
 
 const POLL_MS = 450;
@@ -34,6 +35,15 @@ export function TenderPage() {
   const [rules, setRules] = useState<ProductivityRule[]>([]);
   const [defaults, setDefaults] = useState<Record<string, unknown> | null>(null);
   const typesLoaded = useRef(false);
+  const [scenario, setScenarioState] = useState(() => readScenario(id));
+  const setScenario = useCallback(
+    (next: string) => {
+      setScenarioState(next);
+      saveScenario(id, next);
+    },
+    [id],
+  );
+  useEffect(() => setScenarioState(readScenario(id)), [id]);
 
   const load = useCallback(async () => {
     try {
@@ -157,11 +167,13 @@ export function TenderPage() {
     rules: rulesByCode,
     defaults,
     arriving: phase === "morph",
+    scenario,
+    setScenario,
   };
 
   return (
     <div className={`tender ${phase === "morph" ? "is-arriving" : ""}`}>
-      <TenderHeader bando={bando} defaults={defaults} />
+      <TenderHeader bando={bando} defaults={defaults} scenario={scenario} setScenario={setScenario} />
       <div className="tender__body">
         <Outlet context={context} />
       </div>

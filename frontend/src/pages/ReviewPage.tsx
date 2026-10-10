@@ -19,7 +19,7 @@ import { useTender } from "./tenderContext";
  */
 export function ReviewPage() {
   const { t } = useI18n();
-  const { bando, setBando, products, productsById, rules, arriving } = useTender();
+  const { bando, setBando, products, productsById, rules, arriving, scenario } = useTender();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,9 +54,12 @@ export function ReviewPage() {
   const onPdfSelect = useCallback((lvId: string) => select(lvId, "pdf"), [select]);
   const onShowInPdf = useCallback((lvId: string) => select(lvId, "list"), [select]);
 
-  const save = async (lvId: string, patch: ItemPatch) => {
-    setBando(await api.patchItem(bando.id, lvId, patch));
-  };
+  const save = useCallback(
+    async (lvId: string, patch: ItemPatch) => {
+      setBando(await api.patchItem(bando.id, lvId, patch));
+    },
+    [bando.id, setBando],
+  );
 
   const selected = selectedId ? bando.items.find((item) => item.lv_id === selectedId) : undefined;
   const railCount = bando.page_count || pageCount;
@@ -79,6 +82,7 @@ export function ReviewPage() {
               onSelect={select}
               onShowInPdf={onShowInPdf}
               onSave={save}
+              scenario={scenario}
               headerAction={
                 <button
                   type="button"
@@ -118,6 +122,8 @@ export function ReviewPage() {
                 onSelect={onPdfSelect}
                 onPageChange={setCurrentPage}
                 onPageCount={setPageCount}
+                scenario={scenario}
+                onSavePrice={save}
                 leading={
                   <button
                     type="button"

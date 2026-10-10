@@ -62,10 +62,27 @@ single port.
     step** button for the first missing link: add the quantity, pick a
     catalogue product, pick the labour operation, or type a price. The list
     switches to a compact layout below ~420px (container query).
+  - *Prices on the page*: every position's price cell (`price_bbox`) shows the
+    amount the offer will print for the scenario chosen on the price page, in
+    the print's own type (Helvetica 9pt, scaled with the page): **black** when
+    final (priced, confirmed or typed by hand), **amber** when still to check
+    (not printed until confirmed), empty when there is no price. Clicking a
+    cell opens an editor to type the printed total, confirm an amber price, or
+    go back to the computed price.
 - **Parameters** (`/bandi/:id/parameters`) — every pricing parameter in
   collapsible groups with − / + steppers; each change re-prices the tender.
-- **Price & bid** (`/bandi/:id/price`) — the offer for the chosen bid scenario,
-  how complete it is, the steps from cost to price and the three scenarios.
+- **Price & bid** (`/bandi/:id/price`) — one offer: the chosen strategy's
+  (the same amount as in the tab header, shared by every tab). Parameter chips
+  (overhead, transport, the strategy's margin) edit in place through the
+  parameters API. The hero shows the offer (reference price in its tooltip),
+  margin set vs effective after rounding, chance to win, expected contribution
+  and how many items are priced / to check; a segmented control picks the
+  strategy. One hand-drawn SVG waterfall goes from material and labour (solid =
+  verified, hatched = to check) through direct cost, overhead, transport and
+  cost baseline to margin and offer; unpriced positions are a dashed "?"
+  column, never added. Every column is focusable, explains its calculation base
+  in a tooltip and has a hidden data-table fallback; material, labour and the
+  unpriced column open the Items tab filtered (`?status=…&component=…`).
 
 ## Languages
 

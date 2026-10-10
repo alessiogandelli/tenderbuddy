@@ -100,6 +100,10 @@ export interface Item {
   unit: Unit | null;
   match: Match | null;
   manual_unit_price_chf?: number | null;
+  /** The position's printed offer total, typed by hand (wins over everything). */
+  offer_price_chf?: number | null;
+  /** The estimator confirmed this price (a "to check" price counts as final). */
+  price_confirmed?: boolean;
   status: ItemStatus;
   flags: ItemFlag[];
 }
@@ -123,6 +127,8 @@ export interface PositionResult {
   base_hours_per_unit: number | null;
   hourly_rate_chf: number | null;
   factor_product: number | null;
+  /** What the offer prints for this position, per bid scenario. */
+  offer_prices_chf?: Record<string, number>;
 }
 
 export interface Summary {

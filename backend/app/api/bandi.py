@@ -18,7 +18,7 @@ from ..domain.enums import Classification, ItemStatus, PipelineStatus, PipelineS
 from ..domain.models import Bando, Item, Match
 from ..pipeline.extractors import default_reader
 from ..pipeline.offer_pdf import OfferEntry, fill_offer
-from ..pipeline.pricing import scenario_margin_pct, selling_markup
+from ..pipeline.pricing import offer_amount, scenario_margin_pct
 from ..pipeline.pricing_db import get_pricing_db
 from ..pipeline.runner import recompute, run_pipeline
 from ..util import now_iso
@@ -43,6 +43,15 @@ class ItemPatch(BaseModel):
     confidence: Optional[float] = None
     # Explicit null clears it; omitted leaves it unchanged (same for product_id).
     manual_unit_price_chf: Optional[float] = None
+    # The printed offer total for the position; explicit null clears it.
+    offer_price_chf: Optional[float] = None
+    # Confirm (or un-confirm) the current price. Any change to the price resets
+    # it, unless the same patch sets it again.
+    price_confirmed: Optional[bool] = None
+
+
+# Patch fields that change a position's price, and so its confirmation.
+_PRICE_FIELDS = {"quantity", "unit", "product_id", "install_code", "manual_unit_price_chf", "offer_price_chf"}
 
 
 class OfferExport(BaseModel):
@@ -142,6 +151,14 @@ def get_bando(bando_id: str) -> dict:
     bando = _get_or_404(bando_id)
     if bando.parameters is None:
         bando.parameters = copy.deepcopy(get_pricing_db().parameters)
+    # Tenders saved before offer prices existed: price them once, then keep.
+    stale = any(
+        result.direct_position_cost_chf is not None and not result.offer_prices_chf
+        for result in bando.position_results
+    )
+    if stale and bando.pipeline.status == PipelineStatus.DONE:
+        recompute(bando)
+        storage.save_bando(bando)
     return bando.model_dump(mode="json")
 
 
@@ -240,6 +257,11 @@ def patch_item(bando_id: str, lv_id: str, patch: ItemPatch) -> dict:
         if price is not None and price < 0:
             raise HTTPException(status_code=400, detail="The price cannot be negative")
         item.manual_unit_price_chf = price
+    if "offer_price_chf" in patch.model_fields_set:
+        price = patch.offer_price_chf
+        if price is not None and price < 0:
+            raise HTTPException(status_code=400, detail="The price cannot be negative")
+        item.offer_price_chf = price
     if patch.product_id is not None:
         product = get_pricing_db().product(patch.product_id)
         install_code = patch.install_code or (product.install_code if product else None)
@@ -254,6 +276,11 @@ def patch_item(bando_id: str, lv_id: str, patch: ItemPatch) -> dict:
             confidence=patch.confidence if patch.confidence is not None else 0.9,
             price_source=price_source,
         )
+
+    if patch.price_confirmed is not None:
+        item.price_confirmed = patch.price_confirmed
+    elif patch.model_fields_set & _PRICE_FIELDS:
+        item.price_confirmed = False
 
     recompute(bando)
     storage.save_bando(bando)
@@ -290,7 +317,7 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
         bando.parameters or copy.deepcopy(get_pricing_db().parameters)
     )
     try:
-        markup = selling_markup(db, scenario_margin_pct(db, body.scenario))
+        scenario_margin_pct(db, body.scenario)
     except KeyError:
         return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
 
@@ -301,18 +328,14 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
     for lv_id in dict.fromkeys(body.lv_ids):
         item = items.get(lv_id)
         result = results.get(lv_id)
-        direct = result.direct_position_cost_chf if result else None
-        if item is None or direct is None or not item.price_bbox or not item.source_page:
+        amount = offer_amount(item, result, db, body.scenario) if item and result else None
+        if amount is None or not item.price_bbox or not item.source_page:
             skipped.append(lv_id)
             continue
         entries.append(
             (
                 lv_id,
-                OfferEntry(
-                    page=item.source_page,
-                    price_bbox=item.price_bbox,
-                    amount_chf=round(direct * markup, 2),
-                ),
+                OfferEntry(page=item.source_page, price_bbox=item.price_bbox, amount_chf=amount),
             )
         )
 

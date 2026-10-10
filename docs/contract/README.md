@@ -154,6 +154,8 @@ Every priceable row of the Bando. It is born from the pipeline **or** from manua
     "price_source": "catalog"        // "catalog" | "supplier_package"
   },
   "manual_unit_price_chf": null,     // additive: estimator's all-in unit price, see §5
+  "offer_price_chf": null,           // additive: printed offer total typed by hand, see §5
+  "price_confirmed": false,          // additive: the estimator confirmed this price, see §5
 
   "status": "calculated",            // enum §5
   "flags": ["multi_variant_expanded"] // array, may be empty; enum §5
@@ -186,7 +188,10 @@ Identical to the schema already present in `data/expected_output_example.json`. 
   // Additive: the labour calculation terms, so the row explains itself.
   "base_hours_per_unit": 0.65,
   "hourly_rate_chf": 96.0,
-  "factor_product": 0.9572
+  "factor_product": 0.9572,
+  // Additive: the selling price the offer prints for this position, per bid
+  // scenario; {} when unpriced. See §5 (offer prices).
+  "offer_prices_chf": { "Aggressive": 896.1, "Target": 910.09, "Conservative": 934.43 }
 }
 
 // summary
@@ -294,6 +299,12 @@ All enum values are canonical **English**. They are the machine vocabulary share
 
 **`pipeline.message`** / **`pipeline.item_count`**: live progress for the processing screen. The frontend reads them while the status is `running` to show the current step and count the positions extracted so far.
 
+**`offer_price_chf`** (additive, on an Item): the position's total **as printed in the offer** (the `Betrag` cell), typed by the estimator. It wins over every computed price and is the same in every bid scenario; the position's direct-cost share is that total at the target margin (`offer / ((1 + overhead)(1 + transport) / (1 − target margin))`), so summary, baseline and bid range stay consistent. Status `calculated`, `price_source = manual`. `null` = not set.
+
+**`price_confirmed`** (additive, on an Item): the estimator confirmed the current price, so a price that would otherwise need a check (uncertain match, supplier quote) counts as final. Any PATCH that changes the price (`quantity`, `unit`, `product_id`, `install_code`, `manual_unit_price_chf`, `offer_price_chf`) resets it, unless the same PATCH sets it.
+
+**`offer_prices_chf`** (additive, on a position result): what the offer prints for the position in each bid scenario, `direct_position_cost_chf × (1 + overhead) × (1 + transport) / (1 − scenario margin)`, or `offer_price_chf` for every scenario. The offer PDF export prints exactly these amounts. A tender saved before this field existed is re-priced once when it is opened.
+
 **`pipeline.pages_total`** / **`pipeline.pages_read`** (additive): pages of the PDF, and how many have been read and classified so far (saved mid-step, a few times per second). **`pipeline.lv_pages_total`** / **`pipeline.lv_pages_done`**: how many LV-table pages the vision engine reads, and how many it has finished (0 on the deterministic path). The processing screen fills its page tape from them.
 
 **`overview`** (additive): a panorama of the whole document. `engine` is `luna` when a model reads it, `deterministic` when it is derived from the Items (AI off or failed). `materials_needed` and `labour_needed` are used by the user and by matching.
@@ -321,10 +332,10 @@ All enum values are canonical **English**. They are the machine vocabulary share
 | POST | `/api/bandi/{id}/run` | re-run the pipeline | `Bando` |
 | PUT | `/api/bandi/{id}/items` | replace `items` (manual path) | `Bando` |
 | POST | `/api/bandi/{id}/items` | add a manual Item | `Bando` |
-| PATCH | `/api/bandi/{id}/items/{lv_id}` | edit a position (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`, `manual_unit_price_chf`). An explicit `null` for `product_id` removes the match, for `manual_unit_price_chf` removes the hand price; omitted fields are unchanged | `Bando` |
+| PATCH | `/api/bandi/{id}/items/{lv_id}` | edit a position (`description_raw`, `quantity`, `unit`, `product_id`, `install_code`, `confidence`, `manual_unit_price_chf`, `offer_price_chf`, `price_confirmed`). An explicit `null` for `product_id` removes the match, for `manual_unit_price_chf` / `offer_price_chf` removes that hand price; omitted fields are unchanged | `Bando` |
 | GET | `/api/bandi/{id}/pdf` | the source PDF | `application/pdf` |
 | GET | `/api/bandi/{id}/export` | export the quote | JSON or CSV |
-| POST | `/api/bandi/{id}/export/pdf` | the **offer**: the tender PDF as received, with the selling price of each chosen position written in its `price_bbox` cell (right-aligned on the row's baseline). Body `{"lv_ids": [...], "scenario": "Target" \| null}`; the amount is `direct_position_cost_chf × (1 + overhead) × (1 + transport) / (1 − margin)`, the margin being the scenario's (`null` = target margin). Positions without a price or a price cell are skipped. Headers `X-Offer-Written` / `X-Offer-Skipped` give the counts | `application/pdf` |
+| POST | `/api/bandi/{id}/export/pdf` | the **offer**: the tender PDF as received, with the selling price of each chosen position written in its `price_bbox` cell (right-aligned on the row's baseline). Body `{"lv_ids": [...], "scenario": "Target" \| null}`; the amount is the position's `offer_prices_chf` for that scenario (`null` = target margin), or its `offer_price_chf`. Positions without a price or a price cell are skipped. Headers `X-Offer-Written` / `X-Offer-Skipped` give the counts | `application/pdf` |
 | GET | `/api/catalog` | Products | `Product[]` |
 | GET | `/api/productivity` | Productivity rules | `ProductivityRule[]` |
 | GET | `/api/parameters` | project Parameters | `project_parameters` object |

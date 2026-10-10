@@ -91,6 +91,8 @@ export const api = {
       install_code?: string;
       confidence?: number;
       manual_unit_price_chf?: number | null;
+      offer_price_chf?: number | null;
+      price_confirmed?: boolean;
     },
   ) =>
     request<Bando>(`/bandi/${id}/items/${lvId}`, {

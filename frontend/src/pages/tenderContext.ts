@@ -12,6 +12,9 @@ export interface TenderContext {
   defaults: Record<string, unknown> | null;
   /** True while the page tape is flying into place as the rail. */
   arriving: boolean;
+  /** The bid scenario chosen for the offer, shared by every tab. */
+  scenario: string;
+  setScenario: (scenario: string) => void;
 }
 
 export function useTender(): TenderContext {
