@@ -14,6 +14,7 @@ because many positions differ only by size; the description breaks ties.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import re
 import sys
@@ -425,6 +426,8 @@ def run_ai(
     match_model: Optional[str] = None,
     escalate: bool = True,
     pdf_path: Optional[Path] = None,
+    retrieval: Optional[str] = None,
+    candidate_k: Optional[int] = None,
 ) -> Tuple[List[Item], LatencyReport]:
     """Run the AI pipeline (Responses extraction + Decisions matching)."""
     from .pipeline.ai import (
@@ -457,9 +460,16 @@ def run_ai(
         items.extend(escalate_empty_pages(document, items, reader, pdf_path, usage=usage))
     t2 = time.perf_counter()
     items = canonicalize_items(items)
-    match_items_ai(items, db, model=match_model or config.MATCH_MODEL, usage=usage)
+    semantic = match_items_ai(
+        items,
+        db,
+        model=match_model or config.MATCH_MODEL,
+        usage=usage,
+        retrieval=retrieval,
+        candidate_k=candidate_k,
+    )
     if escalate:
-        escalate_matches(items, db, usage=usage)
+        escalate_matches(items, db, usage=usage, semantic=semantic)
     t3 = time.perf_counter()
 
     latency.read_s = t1 - t0
@@ -477,6 +487,37 @@ def run_ai(
     return items, latency
 
 
+def _candidate_fn(db: PricingDB, candidate_k: int, retrieval: str, items: Sequence[Item]):
+    """A ``candidate_recall`` probe that mirrors the run's retrieval mode."""
+    if retrieval != "semantic":
+        return lambda item: {  # noqa: E731 - tiny local probe of the pre-filter
+            p.product_id for p in candidate_products(item, db, k=candidate_k)
+        }
+
+    from .pipeline.ai.client import async_client
+    from .pipeline.ai.retrieval import build_semantic_contexts
+    from .pipeline.ai.usage import UsageLedger
+
+    async def _build() -> dict:
+        active = async_client()
+        if active is None:
+            return {}
+        try:
+            return await build_semantic_contexts(
+                active, items, db, UsageLedger(), mode="semantic"
+            )
+        finally:
+            await active.close()
+
+    contexts = asyncio.run(_build())
+    return lambda item: {  # noqa: E731
+        p.product_id
+        for p in candidate_products(
+            item, db, k=candidate_k, semantic=contexts.get(item.lv_id)
+        )
+    }
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Extraction accuracy eval.")
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
@@ -487,6 +528,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--extract-effort", default=None)
     parser.add_argument("--match-model", default=None)
     parser.add_argument("--no-escalate", action="store_true")
+    parser.add_argument(
+        "--retrieval",
+        choices=["auto", "lexical", "semantic"],
+        default=None,
+        help="candidate retrieval for matching (default: BANDO_RETRIEVAL_MODE)",
+    )
+    parser.add_argument(
+        "--candidate-k",
+        type=int,
+        default=None,
+        help="candidate products offered per position (default: BANDO_CANDIDATE_K)",
+    )
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -500,13 +553,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    from . import config
+
     db = get_pricing_db()
     reader = default_reader()
-    candidate_fn = lambda item: {  # noqa: E731 - tiny local probe of the pre-filter
-        p.product_id for p in candidate_products(item, db)
-    }
-
-    from . import config
+    retrieval = args.retrieval or config.RETRIEVAL_MODE
+    candidate_k = args.candidate_k or config.CANDIDATE_K
 
     use_ai = (args.ai or config.ai_enabled()) and not args.no_ai
     if use_ai and not config.ai_enabled():
@@ -517,9 +569,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     pdf_path = args.pdf
 
     if use_ai:
-        label = args.tag or "ai-%s-%s" % (
+        label = args.tag or "ai-%s-%s-%s-k%d" % (
             args.extract_model or config.EXTRACT_MODEL,
             args.extract_effort or config.EXTRACT_EFFORT,
+            retrieval,
+            candidate_k,
         )
         items, latency = run_ai(
             data_dir=args.data_dir,
@@ -530,12 +584,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             match_model=args.match_model,
             escalate=not args.no_escalate,
             pdf_path=pdf_path,
+            retrieval=retrieval,
+            candidate_k=candidate_k,
         )
     else:
         label = args.tag or "deterministic"
         items, latency = run_deterministic(
             data_dir=args.data_dir, reader=reader, db=db, pdf_path=pdf_path
         )
+
+    candidate_fn = (
+        None
+        if custom
+        else _candidate_fn(db, candidate_k, retrieval if use_ai else "lexical", items)
+    )
     if custom:
         label = "%s:%s" % (label, pdf_path.name)
 
@@ -545,7 +607,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         gt_rows=[] if custom else None,
         label=label,
         latency=latency,
-        candidate_fn=None if custom else candidate_fn,
+        candidate_fn=candidate_fn,
     )
     print(report.format_table())
 

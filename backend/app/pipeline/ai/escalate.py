@@ -24,6 +24,7 @@ from ..pricing_db import PricingDB
 from ..steps.match import candidate_products, _product_tokens
 from .client import async_client, with_retry
 from .extract import _build_item
+from .retrieval import SemanticContext, build_semantic_contexts
 from .usage import UsageLedger
 
 _MATCH_PROMPT = (
@@ -145,8 +146,13 @@ def escalate_matches(
     usage: Optional[UsageLedger] = None,
     budget: Optional[int] = None,
     concurrency: Optional[int] = None,
+    semantic: Optional[Dict[str, SemanticContext]] = None,
 ) -> List[Item]:
-    """Level 2: re-decide uncertain matches with a reasoning model."""
+    """Level 2: re-decide uncertain matches with a reasoning model.
+
+    ``semantic`` reuses the per-item retrieval contexts built by the matcher;
+    when omitted, retrieval is rebuilt for the (few) escalated targets.
+    """
     usage = usage or UsageLedger()
     model = model or config.ESCALATE_MODEL
     effort = effort or config.ESCALATE_EFFORT
@@ -158,15 +164,20 @@ def escalate_matches(
     if not targets:
         return []
 
-    candidates = {
-        it.lv_id: candidate_products(it, db, k=12, product_tokens=tokens) for it in targets
-    }
-
     async def main() -> None:
         owns_client = client is None
         active = client or async_client()
         if active is None:
             raise RuntimeError("AI escalation requested but OpenAI is not configured.")
+        contexts = semantic
+        if contexts is None:
+            contexts = await build_semantic_contexts(active, targets, db, usage)
+        candidates = {
+            it.lv_id: candidate_products(
+                it, db, k=12, product_tokens=tokens, semantic=contexts.get(it.lv_id)
+            )
+            for it in targets
+        }
         semaphore = asyncio.Semaphore(concurrency)
 
         async def one(it: Item) -> None:

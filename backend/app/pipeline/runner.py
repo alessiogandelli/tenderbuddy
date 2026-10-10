@@ -145,9 +145,9 @@ def _match_items(
     if not use_ai:
         steps_pkg.match_items(items, db)
         return
-    match_items_ai(items, db, usage=usage, context=context)
+    semantic = match_items_ai(items, db, usage=usage, context=context)
     if deep:
-        escalate_matches(items, db, usage=usage)
+        escalate_matches(items, db, usage=usage, semantic=semantic)
 
 
 def run_pipeline(

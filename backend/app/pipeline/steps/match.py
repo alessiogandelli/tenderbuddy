@@ -8,8 +8,9 @@ visible status, never a guessed price.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
+from ... import config
 from ...domain.enums import PriceSource
 from ...domain.models import Item, Match, Product
 from ..pricing import reconcile_item
@@ -52,14 +53,27 @@ _CATEGORY_HINTS = [
 
 _TOKEN_RE = re.compile(r"[a-zäöü0-9]{4,}")
 
-# The AI matcher's pre-filter size. The catalog is small (56 products) and only
-# the unit-compatible subset goes in, so a wide net is cheap and keeps the
-# correct product available (measured by the eval's candidate_recall).
-CANDIDATE_K = 20
+# The AI matcher's pre-filter size. The catalog is small and only the
+# unit-compatible subset goes in, so a wide net is cheap and keeps the correct
+# product available (measured by the eval's candidate_recall). Overridable via
+# BANDO_CANDIDATE_K so lexical and semantic retrieval can be compared.
+CANDIDATE_K = config.CANDIDATE_K
 
 
 def _tokens(text: str) -> set:
     return set(_TOKEN_RE.findall(text.lower()))
+
+
+def _match_text(item: Item) -> str:
+    """Description plus the section heading the row sits under.
+
+    The section tells otherwise identical variant rows apart (buried vs.
+    above-ground ducts, ...), so it must reach both the lexical filter and the
+    AI matcher.
+    """
+    base = "%s %s" % (item.description_raw or "", item.description_normalized or "")
+    section = (item.attributes or {}).get("section")
+    return ("%s %s" % (section, base)).strip() if section else base
 
 
 def _hint_category(text: str) -> Optional[str]:
@@ -123,29 +137,48 @@ def candidate_products(
     db: PricingDB,
     k: int = CANDIDATE_K,
     product_tokens: Optional[dict] = None,
+    semantic: Optional[Any] = None,
 ) -> List[Product]:
-    """Unit-compatible catalog products ranked by the deterministic score.
+    """Unit-compatible catalog products for one Item.
 
-    Used by the AI matcher as its pre-filter, and measured by the eval's
-    ``candidate_recall`` so a filter miss is never blamed on the model.
+    Ranking is the deterministic lexical score. When a ``semantic`` context is
+    passed (from :mod:`app.pipeline.ai.retrieval`) the lexical top-k is unioned
+    with the cosine top-k and re-ranked by a blend, so a product the lexical
+    filter already found is never lost and language-independent matches are
+    added. Measured by the eval's ``candidate_recall`` so a filter miss is never
+    blamed on the model.
     """
     product_tokens = product_tokens if product_tokens is not None else _product_tokens(db)
-    text = "%s %s" % (item.description_raw or "", item.description_normalized or "")
+    text = _match_text(item)
     hinted = _hint_category(text)
     item_tokens = _tokens(text)
     compatible = [p for p in db.product_list if _unit_compatible(item, p)]
-    ranked = sorted(
+    lexical = sorted(
         compatible,
         key=lambda p: (-_score(item, p, hinted, item_tokens, product_tokens[p.product_id])),
     )
-    return ranked[:k]
+    if semantic is None:
+        return lexical[:k]
+
+    pool = {p.product_id: p for p in lexical[:k]}
+    for product in sorted(compatible, key=lambda p: -semantic.similarity(p.product_id))[:k]:
+        pool.setdefault(product.product_id, product)
+    weight = float(getattr(semantic, "weight", 0.7))
+
+    def blended(product: Product) -> float:
+        lex = _score(item, product, hinted, item_tokens, product_tokens[product.product_id])
+        return weight * semantic.similarity(product.product_id) + (1.0 - weight) * min(
+            1.0, max(0.0, lex)
+        )
+
+    return sorted(pool.values(), key=lambda p: -blended(p))[:k]
 
 
 def match_items(items: List[Item], db: PricingDB) -> List[Item]:
     tokens = _product_tokens(db)
 
     for item in items:
-        text = "%s %s" % (item.description_raw or "", item.description_normalized or "")
+        text = _match_text(item)
         hinted = _hint_category(text)
         item_tokens = _tokens(text)
 

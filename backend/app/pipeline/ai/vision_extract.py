@@ -62,6 +62,12 @@ SYSTEM_PROMPT = (
     "inside the RIGHTMOST column (Betrag) where the price will be written. It must "
     "be in the Betrag column only and must NOT span the description height or the "
     "whole column.\n"
+    "- section: the nearest section heading ABOVE this row — the bold banner that "
+    "groups several positions (e.g. 'Rohreinlagen unter Bodenplatte'), copied as "
+    "written. Use null when the row sits directly under the column header with no "
+    "banner above it. Rows that belong to the same banner share its section text; "
+    "this context tells apart otherwise identical rows (e.g. buried vs. above-ground "
+    "ducts).\n"
     "\n"
     "All bboxes are fractions of the page: x from 0 (left) to 1 (right), y from 0 "
     "(top) to 1 (bottom). Keep the name, measure and price boxes on the same row. "
@@ -84,6 +90,7 @@ _SCHEMA: Dict[str, Any] = {
                     "unit",
                     "measure_present",
                     "price_present",
+                    "section",
                     "name_bbox",
                     "measure_bbox",
                     "price_bbox",
@@ -94,6 +101,7 @@ _SCHEMA: Dict[str, Any] = {
                     "unit": {"type": ["string", "null"]},
                     "measure_present": {"type": "boolean"},
                     "price_present": {"type": "boolean"},
+                    "section": {"type": ["string", "null"]},
                     "name_bbox": {
                         "type": ["array", "null"],
                         "items": {"type": "number"},
@@ -219,6 +227,20 @@ def _derive_price_box(
     return [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)]
 
 
+def _summary_heading(description: Optional[str]) -> bool:
+    """True for a cost-summary / recap heading ("A Apparate", "B Kanäle").
+
+    Such lines carry no quantity, no unit and no digits — a real position always
+    has a quantity somewhere. Kept separate from real rows so a recap page that
+    slips through classification still cannot produce phantom positions.
+    """
+    if not description:
+        return False
+    if any(char.isdigit() for char in description):
+        return False
+    return len(description.split()) <= 6
+
+
 def _build(
     counter: int,
     system: Optional[str],
@@ -240,6 +262,13 @@ def _build(
         qty = float(qty) if qty is not None else None
     except (TypeError, ValueError):
         qty = None
+    section = (row.get("section") or "").strip() or None
+
+    # A recap line ("A Apparate", "B Kanäle") has no quantity and no unit: it is
+    # a cost-summary heading, not a position. Never keep it as an Item.
+    summary_row = kept and qty is None and unit is None and _summary_heading(description)
+    if summary_row:
+        kept = False
 
     name_bbox = _normalize_box(row.get("name_bbox"))
     if with_geometry and name_bbox is None and description:
@@ -260,7 +289,7 @@ def _build(
                 name_bbox=name_bbox,
                 price_bbox=price_bbox,
                 kept=False,
-                reason="no_measure_or_price",
+                reason="summary_row" if summary_row else "no_measure_or_price",
             ),
             None,
         )
@@ -277,6 +306,10 @@ def _build(
     item.name_bbox = name_bbox
     item.price_bbox = price_bbox
     item.source_bbox = name_bbox
+    if section:
+        # Section context travels with the row so the matcher can tell otherwise
+        # identical variants apart (buried vs. above-ground ducts, ...).
+        item.attributes["section"] = section
 
     if qty is None:
         item.flags.append(ItemFlag.MISSING_QUANTITY)

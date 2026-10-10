@@ -19,6 +19,7 @@ from ..pricing import reconcile_item
 from ..pricing_db import PricingDB
 from ..steps.match import CANDIDATE_K, candidate_products, _product_tokens
 from .client import async_client, with_retry
+from .retrieval import CatalogEmbeddings, SemanticContext, build_semantic_contexts
 from .usage import UsageLedger
 
 NONE_CHOICE = "__none__"
@@ -50,7 +51,9 @@ def _describe(product: Product) -> str:
 def _question(item: Item, candidates: Sequence[Product]) -> dict:
     choices = [{"value": p.product_id, "description": _describe(p)} for p in candidates]
     choices.append({"value": NONE_CHOICE, "description": "No catalog product fits this position."})
-    bits = [item.description_raw or ""]
+    section = (item.attributes or {}).get("section")
+    bits = [section] if section else []
+    bits.append(item.description_raw or "")
     if item.quantity is not None:
         bits.append("qty %s %s" % (item.quantity, item.unit.value if item.unit else ""))
     return {
@@ -172,36 +175,23 @@ def match_items_ai(
     batch_size: int = BATCH_SIZE,
     concurrency: Optional[int] = None,
     context: str = "",
-) -> None:
-    """Assign each Item a Match via the Decisions API, in place."""
+    retrieval: Optional[str] = None,
+    candidate_k: Optional[int] = None,
+    catalog_embeddings: Optional[CatalogEmbeddings] = None,
+) -> Dict[str, SemanticContext]:
+    """Assign each Item a Match via the Decisions API, in place.
+
+    Candidate retrieval is semantic when embeddings are available (see
+    :mod:`app.pipeline.ai.retrieval`), else the deterministic lexical filter.
+    Returns the per-item semantic contexts so escalation can reuse them.
+    """
     usage = usage or UsageLedger()
     model = model or config.MATCH_MODEL
     concurrency = concurrency or config.AI_CONCURRENCY
+    k = candidate_k or CANDIDATE_K
     tokens = _product_tokens(db)
 
-    candidates: Dict[str, List[Product]] = {
-        item.lv_id: candidate_products(item, db, k=CANDIDATE_K, product_tokens=tokens)
-        for item in items
-    }
-
-    matchable: List[Item] = []
-    for item in items:
-        if candidates[item.lv_id]:
-            matchable.append(item)
-        else:
-            item.match = None
-            if ItemFlag.NO_MATCH not in item.flags:
-                item.flags.append(ItemFlag.NO_MATCH)
-            reconcile_item(item, db)
-
-    if not matchable:
-        return
-
-    batches = [
-        matchable[i : i + batch_size] for i in range(0, len(matchable), batch_size)
-    ]
-
-    async def main() -> None:
+    async def main() -> Dict[str, SemanticContext]:
         owns_client = client is None
         active = client or async_client()
         if active is None:
@@ -210,11 +200,48 @@ def match_items_ai(
                 "(set OPENAI_API_KEY in backend/.env)."
             )
         try:
+            semantics = await build_semantic_contexts(
+                active,
+                items,
+                db,
+                usage,
+                mode=retrieval,
+                catalog=catalog_embeddings,
+            )
+            candidates: Dict[str, List[Product]] = {
+                item.lv_id: candidate_products(
+                    item,
+                    db,
+                    k=k,
+                    product_tokens=tokens,
+                    semantic=semantics.get(item.lv_id),
+                )
+                for item in items
+            }
+
+            matchable: List[Item] = []
+            for item in items:
+                if candidates[item.lv_id]:
+                    matchable.append(item)
+                else:
+                    item.match = None
+                    if ItemFlag.NO_MATCH not in item.flags:
+                        item.flags.append(ItemFlag.NO_MATCH)
+                    reconcile_item(item, db)
+
+            if not matchable:
+                return semantics
+
+            batches = [
+                matchable[i : i + batch_size]
+                for i in range(0, len(matchable), batch_size)
+            ]
             await _run_batches(
                 active, model, batches, candidates, db, usage, concurrency, context
             )
+            return semantics
         finally:
             if owns_client:
                 await active.close()
 
-    asyncio.run(main())
+    return asyncio.run(main())

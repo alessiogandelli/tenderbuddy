@@ -54,6 +54,24 @@ EXTRACT_EFFORT = os.environ.get("BANDO_EXTRACT_EFFORT", "none").strip().lower()
 
 MATCH_MODEL = os.environ.get("BANDO_MATCH_MODEL", "gpt-6-luna").strip()
 
+# Semantic candidate retrieval: the catalog is English while tenders are
+# German/Italian/French, so lexical token overlap finds nothing for most
+# positions. We embed the catalog once (cached on disk) and each run's item
+# descriptions, and retrieve the matcher's candidate list by meaning.
+# auto   -> semantic when OpenAI is configured, else lexical
+# lexical -> never embed; use the deterministic token pre-filter
+# semantic -> require embeddings (still falls back to lexical on failure)
+RETRIEVAL_MODE = os.environ.get("BANDO_RETRIEVAL_MODE", "auto").strip().lower()
+EMBED_MODEL = os.environ.get("BANDO_EMBED_MODEL", "text-embedding-3-large").strip()
+# 0 = the model's native dimensionality (3072 for text-embedding-3-large).
+EMBED_DIMENSIONS = int(os.environ.get("BANDO_EMBED_DIMENSIONS", "0"))
+# Blend of cosine similarity vs. the deterministic lexical score in [0, 1].
+SEMANTIC_WEIGHT = float(os.environ.get("BANDO_SEMANTIC_WEIGHT", "0.7"))
+# Candidate products offered to the Decisions API per position.
+CANDIDATE_K = int(os.environ.get("BANDO_CANDIDATE_K", "30"))
+# Where the catalog embedding matrix is cached (git-ignored runtime dir).
+EMBED_CACHE_DIR = RUNTIME_DIR / "cache"
+
 # Page classification (step 1): the Decisions API answers one choice question
 # per page. Batched so a 200-page tender is a handful of calls.
 CLASSIFY_MODEL = os.environ.get("BANDO_CLASSIFY_MODEL", "gpt-6-luna").strip()

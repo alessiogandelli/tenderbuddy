@@ -24,6 +24,17 @@ def _is_german_table(text: str) -> bool:
     )
 
 
+# A cost-summary / recapitulation page keeps the six-column header but lists
+# lettered categories, not positions. It must win over the header check.
+_RECAP = (
+    "kostenzusammenstellung",
+    "zusammenstellung",
+    "ricapitolazione",
+    "recapitulation",
+    "cost summary",
+)
+
+
 # Ordered keyword buckets for the non-structural kinds. First hit wins.
 _KEYWORDS = (
     (PageType.INDEX, ("inhaltsverzeichnis", "indice", "contents", "table of contents")),
@@ -37,6 +48,12 @@ _KEYWORDS = (
 
 
 def classify_page_deterministic(page_number: int, text: str) -> PageClassification:
+    low = text.lower()
+    if any(keyword in low for keyword in _RECAP):
+        return PageClassification(
+            page=page_number, type=PageType.MODULO_OFFERTA, confidence=0.7,
+            reason="cost summary / recap",
+        )
     if _is_german_table(text):
         return PageClassification(
             page=page_number, type=PageType.LV_TABLE, confidence=0.9,
@@ -47,7 +64,6 @@ def classify_page_deterministic(page_number: int, text: str) -> PageClassificati
             page=page_number, type=PageType.LV_OTHER, confidence=0.6,
             reason="modulo offerta header",
         )
-    low = text.lower()
     for page_type, keywords in _KEYWORDS:
         if any(keyword in low for keyword in keywords):
             return PageClassification(

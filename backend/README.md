@@ -75,9 +75,25 @@ data rather than taste.
 | `BANDO_AI_MODE` | `auto` | `auto` \| `off` \| `forced` |
 | `BANDO_EXTRACT_MODEL` / `BANDO_EXTRACT_EFFORT` | `gpt-6-luna` / `none` | extraction (Responses API) |
 | `BANDO_MATCH_MODEL` | `gpt-6-luna` | matching (Decisions API) |
+| `BANDO_RETRIEVAL_MODE` | `auto` | candidate retrieval: `auto` \| `lexical` \| `semantic` |
+| `BANDO_EMBED_MODEL` | `text-embedding-3-large` | embeddings for semantic retrieval |
+| `BANDO_EMBED_DIMENSIONS` | `0` | embedding size; `0` = model default |
+| `BANDO_SEMANTIC_WEIGHT` | `0.7` | cosine vs. lexical blend for candidate ranking |
+| `BANDO_CANDIDATE_K` | `30` | candidate products offered to the matcher per position |
 | `BANDO_ESCALATE_MODEL` / `_EFFORT` | `gpt-6-astra` / `medium` | uncertain-case escalation |
 | `BANDO_AI_CONCURRENCY` | `8` | LV pages in flight |
 | `BANDO_ESCALATION_BUDGET` | `20` | max escalation calls per run |
+
+### Candidate retrieval
+
+The catalogue is English while tenders are German/Italian/French, so the
+deterministic token pre-filter offers the wrong products for most positions. In
+`semantic` mode the pipeline embeds the catalogue once (cached under
+`runtime/cache/`) and each run's item descriptions, and hands the matcher
+candidates retrieved by meaning — a German `Kompaktschalldämpfer` reaches the
+English `Compact silencer`. It blends with the lexical score and never drops a
+product the lexical filter already found; with no key, or on any embedding
+error, it silently falls back to lexical.
 
 ## Layout
 

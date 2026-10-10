@@ -211,12 +211,122 @@ parser remains the German offline one.**
 
 ---
 
-## 8. Recommended configuration
+## 8. Finding 6 — Semantic candidate retrieval
+
+The catalogue is English, the tender is German: an item named
+`Kompaktschalldämpfer` shares **zero tokens** with `Compact silencer`, so the
+lexical pre-filter offers the wrong products and the Decisions matcher can only
+answer `none`. Of 113 unmatched items in a German run, **85 shared no token with
+any unit-compatible product**.
+
+Fix: embed the catalogue once (cached) and each run's items with
+`text-embedding-3-large`, retrieve candidates by cosine, and blend with the
+lexical score (never dropping a product lexical already found). Measured three
+ways:
+
+**A. Curated German→English retrieval set** (57 real no-match items, expected
+install code known) — is the right product in the candidate set?
+
+| K | lexical | semantic |
+|---|---|---|
+| 10 | 33/57 (58%) | 46/57 (81%) |
+| 20 | 34/57 (60%) | 55/57 (96%) |
+| **30** | 34/57 (60%) | **57/57 (100%)** |
+
+**B. Fixed items, only retrieval changes** (the 256 vision-extracted items from
+the real German run, re-matched twice):
+
+| | matched | newly matched | lost | changed | match calls | cost | match p50 |
+|---|---|---|---|---|---|---|---|
+| lexical | 148 | — | — | — | 22 | $0.037 | 0.8 s |
+| **semantic** | **229** | 80 | 2 | 16 | 24 | $0.043 | 1.4 s |
+
+`+81 matched (+55%)`. The 2 "lost" are acceptable: one (`Fortluft` → a silencer)
+was a wrong lexical match; the 16 changed are lateral/variant picks, several
+improvements (`Fortluft` supply→exhaust AHU, `Potentialverbindung` → `BONDING`).
+Spot-checks of newly matched items are correct (`Zeigerthermometer` → dial
+thermometer, `Druckwächter` → pressure transmitter, `Zuluftgitter` → diffuser).
+
+**C. Cost** — one catalog embedding call (cached) plus one item batch per run:
+**+$0.006 and +0.6 s** on matching. Negligible against the ~42 s extraction.
+
+The visible `calculated` count rises only 64 → 78 because **54 of the 80 newly
+matched items land on products whose `install_code` has no productivity rule** —
+retrieval found the right product, but pricing refuses it. That gap is the next
+blocker, kept separate on purpose.
+
+---
+
+## 9. Finding 7 — The catalogue and the labour rules were out of sync
+
+Matching and pricing are two gates. `reconcile_item` only calls an item
+priceable when it has a product **and** a `ProductivityRule` for that product's
+`install_code`. `catalog_extended.csv` had **22 install codes absent from
+`productivity.csv`**, so correctly matched positions fell to `review_required`
+with no price — the more the matcher improved, the more visible this became.
+
+Two fixes:
+
+- **Extended rules** (`productivity_extended.csv`): every catalogue
+  `install_code` now has a rule; `NO_INSTALL` is 0 hours (material/service only).
+  The added hours are **estimates anchored to an analogous rule**.
+- **Supplier packages** no longer need a rule of ours: a product with
+  `supplier_quote_required` becomes `supplier_quote_required` from
+  product + quantity alone, priced material-only (labour 0) until the supplier
+  confirms.
+
+On the same fixed 256 German items (semantic retrieval, K=30):
+
+| | review_required | calculated | supplier_quote_required | blocked by a missing rule |
+|---|---|---|---|---|
+| before | 160 | 78 | 18 | 130 |
+| **after** | **36** | **156** | **64** | **0** |
+
+The remaining 36 are legitimate: 30 with no matching product, 6 with no
+quantity. A coverage guard (`tests/test_productivity.py`) fails the build if a
+catalogue code ever lacks a rule again.
+
+---
+
+## 10. Finding 8 — Section context and recap pages
+
+Two extraction problems visible in the workbench:
+
+- **Variants lost their context.** Rows under a bold banner
+  (*Rohreinlagen unter Bodenplatte*) were extracted with only their own text
+  (*Ø 250 mm, Bogen 90°*), so the matcher read a generic bend and picked
+  `P-FTG-B-250-90` instead of the buried `P-EDL-B250-90`; *Ringraumdichtung*
+  became a fire seal. Fix: the vision extractor returns the nearest **section
+  heading** per row; it travels in `attributes["section"]` and is included in
+  the lexical filter, the item embeddings and the Decisions question. The seven
+  buried-duct variants now all match the correct `P-EDL-*` product.
+- **Recap pages became positions.** A `KOSTENZUSAMMENSTELLUNG` page keeps the
+  six-column header but lists lettered categories (A Apparate, B Kanäle, …); it
+  was classified `lv_table` and produced six phantom items. Fix: recap pages
+  classify as `modulo_offerta` (deterministic keyword + a stronger prompt), and
+  a row with no quantity, no unit and no digit is never kept.
+
+Effect on the same German tender (combined with the retrieval/pricing work):
+
+| | review_required | calculated | supplier_quote_required | items |
+|---|---|---|---|---|
+| before | 160 | 71 | 19 | 263 |
+| **after** | **23** | **145** | **63** | **246** |
+
+The 39 pages that left `lv_table` held only 4 quantity-less description blobs,
+so no real positions were lost.
+
+---
+
+## 11. Recommended configuration
 
 ```bash
 BANDO_EXTRACT_MODEL=gpt-6-luna
 BANDO_EXTRACT_EFFORT=none      # more accurate AND faster than "low"
 BANDO_MATCH_MODEL=gpt-6-luna   # Decisions API, input-only
+BANDO_RETRIEVAL_MODE=semantic  # candidate retrieval by meaning (catalogue is English)
+BANDO_EMBED_MODEL=text-embedding-3-large
+BANDO_CANDIDATE_K=30
 BANDO_ESCALATE_MODEL=gpt-6-astra
 BANDO_ESCALATE_EFFORT=medium   # only for dubious cases
 BANDO_AI_CONCURRENCY=8
@@ -228,7 +338,7 @@ full escalation on every run. The margin is huge.
 
 ---
 
-## 9. Residual errors (honesty)
+## 12. Residual errors (honesty)
 
 On the 22 verified, with the recommended configuration, the missed matches are
 ~5 (prod 77%). Known causes, not hidden:
@@ -248,7 +358,7 @@ None of these is silent: they all end up in "Da rivedere" with the flag
 
 ---
 
-## 10. How to reproduce
+## 13. How to reproduce
 
 ```bash
 cd backend
@@ -258,6 +368,8 @@ bando-eval --tag sol --extract-model gpt-6.1-sol --extract-effort low
 bando-eval --tag astra --extract-model gpt-6-astra --extract-effort low
 bando-eval --tag luna-esc --extract-effort none    # with escalation
 bando-eval --tag ita --extract-effort none --pdf runtime/bandi/<id>.pdf
+bando-eval --no-escalate --retrieval lexical  --candidate-k 20 --tag lex-k20
+bando-eval --no-escalate --retrieval semantic --candidate-k 30 --tag sem-k30
 ```
 
 Each run appends to `tmp/eval_report.json`. The automatic gate:
@@ -268,13 +380,15 @@ EVAL_MIN_RECALL=0.9 .venv/bin/python -m pytest tests/test_ground_truth.py
 
 ---
 
-## 11. Architecture in one line per piece
+## 14. Architecture in one line per piece
 
 - **`pipeline/extractors/`** — PDF reading (PyMuPDF + pypdf fallback), geometry.
 - **`pipeline/steps/`** — the 7 deterministic steps, including the rewritten parser.
 - **`pipeline/ai/`** — the interchangeable AI engines: `extract` (Responses +
-  structured output), `match` (Decisions API), `escalate` (Astra on dubious cases),
-  `usage` (token/cost/latency). Deterministic fallback if the key is missing.
+  structured output), `retrieval` (catalog/item embeddings for the matcher's
+  candidate pre-filter), `match` (Decisions API), `escalate` (Astra on dubious
+  cases), `usage` (token/cost/latency). Deterministic fallback if the key is
+  missing.
 - **`app/eval.py`** — the harness that guided every decision.
 - **`tests/`** — golden (price to the cent), ground truth (recall ≥ 0.9),
   AI adapters (fake client), API.

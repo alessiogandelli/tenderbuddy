@@ -180,7 +180,7 @@ class PipelineState(BaseModel):
 
 class Profile(BaseModel):
     catalog_version: str = "catalog_extended.csv"
-    productivity_version: str = "productivity.csv"
+    productivity_version: str = "productivity_extended.csv"
     parameters_version: str = "project_parameters.json"
 
 

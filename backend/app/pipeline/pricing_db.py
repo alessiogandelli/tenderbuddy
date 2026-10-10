@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from functools import lru_cache
 from typing import Dict, List
 
@@ -11,7 +12,7 @@ from ..config import DATA_DIR
 from ..domain.models import Product, ProductivityRule
 
 CATALOG_FILE = "catalog_extended.csv"
-PRODUCTIVITY_FILE = "productivity.csv"
+PRODUCTIVITY_FILE = "productivity_extended.csv"
 PARAMETERS_FILE = "project_parameters.json"
 
 
@@ -55,11 +56,13 @@ class PricingDB:
 
         productivity = pd.read_csv(self.data_dir / PRODUCTIVITY_FILE)
         for row in productivity.to_dict(orient="records"):
-            keys = [
-                k.strip()
-                for k in str(row.get("factor_keys") or "").split("|")
-                if k.strip()
-            ]
+            # An empty factor_keys cell reads as NaN, not "": treat it as none.
+            raw_keys = row.get("factor_keys")
+            keys = (
+                [k.strip() for k in raw_keys.split("|") if k.strip()]
+                if isinstance(raw_keys, str)
+                else []
+            )
             rule = ProductivityRule(
                 install_code=str(row["install_code"]),
                 work_type=row.get("work_type"),
@@ -70,6 +73,22 @@ class PricingDB:
                 factor_keys=keys,
             )
             self.rules[rule.install_code] = rule
+
+        # A catalogue product with no productivity rule cannot be priced (it
+        # falls to review_required). Warn loudly so a new catalogue code is
+        # never silently unpriceable; `tests/test_productivity.py` gates it.
+        unruled = sorted(
+            {
+                product.install_code
+                for product in self.product_list
+                if product.install_code and product.install_code not in self.rules
+            }
+        )
+        if unruled:
+            warnings.warn(
+                "catalog install_codes without a productivity rule: %s"
+                % ", ".join(unruled)
+            )
 
         with open(self.data_dir / PARAMETERS_FILE, encoding="utf-8") as fh:
             self.parameters = json.load(fh)

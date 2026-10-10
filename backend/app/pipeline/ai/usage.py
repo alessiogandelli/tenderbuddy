@@ -14,6 +14,8 @@ MODEL_PRICES = {
     "gpt-6-luna": (0.10, 0.50),
     "gpt-6.1-sol": (2.00, 10.00),
     "gpt-6-astra": (10.00, 50.00),
+    "text-embedding-3-large": (0.13, 0.0),
+    "text-embedding-3-small": (0.02, 0.0),
 }
 # Unknown models are billed at the priciest known rate, so costs never read low.
 _DEFAULT_PRICE = (10.00, 50.00)

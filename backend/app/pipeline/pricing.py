@@ -59,32 +59,49 @@ def price_item(item: Item, db: PricingDB) -> PositionResult:
 
     product = db.product(item.match.product_id)
     rule = db.rule(item.match.install_code) if item.match.install_code else None
-    if product is None or rule is None or product.net_cost_chf is None:
+    if product is None or product.net_cost_chf is None:
+        return base
+
+    # A supplier package is quoted by the supplier, so our labour rule is
+    # optional: without one we still price the material and let the supplier
+    # confirm the rest. A catalogue product needs a rule to be priceable.
+    supplier = bool(product.supplier_quote_required)
+    if rule is None and not supplier:
         return base
 
     waste = 1.0 + db.waste_pct / 100.0
     material = item.quantity * float(product.net_cost_chf) * waste
 
-    hours = item.quantity * float(rule.base_hours_per_unit) * _factor_product(
-        db, rule.factor_keys
-    )
-    rate = float(rule.default_hourly_rate_chf or 0.0)
+    if rule is not None:
+        hours = item.quantity * float(rule.base_hours_per_unit) * _factor_product(
+            db, rule.factor_keys
+        )
+        rate = float(rule.default_hourly_rate_chf or 0.0)
+        factor_product = round(_factor_product(db, rule.factor_keys), 4)
+        install_code = rule.install_code
+    else:
+        hours = 0.0
+        rate = 0.0
+        factor_product = None
+        install_code = item.match.install_code
     labour = hours * rate
     direct = material + labour
 
     base.matched_product_id = product.product_id
-    base.install_code = rule.install_code
+    base.install_code = install_code
     base.net_unit_cost_chf = round(float(product.net_cost_chf), 4)
     base.material_cost_chf = round(material, 2)
     base.adjusted_install_hours = round(hours, 2)
     base.labour_cost_chf = round(labour, 2)
     base.direct_position_cost_chf = round(direct, 2)
-    base.base_hours_per_unit = round(float(rule.base_hours_per_unit), 4)
+    base.base_hours_per_unit = (
+        round(float(rule.base_hours_per_unit), 4) if rule is not None else None
+    )
     base.hourly_rate_chf = round(rate, 2)
-    base.factor_product = round(_factor_product(db, rule.factor_keys), 4)
+    base.factor_product = factor_product
     base.price_source = (
         PriceSource.SUPPLIER_PACKAGE
-        if item.match.price_source == PriceSource.SUPPLIER_PACKAGE
+        if supplier or item.match.price_source == PriceSource.SUPPLIER_PACKAGE
         else PriceSource.CATALOG
     )
     base.match_confidence = round(float(item.match.confidence), 4)
@@ -221,11 +238,14 @@ def reconcile_item(item: Item, db: PricingDB) -> Item:
         if item.match and item.match.install_code
         else None
     )
+    # A supplier package is quoted by the supplier, so our labour rule is
+    # optional; a catalogue product needs one to be priced.
+    supplier = product is not None and bool(product.supplier_quote_required)
     priceable = (
         product is not None
         and product.net_cost_chf is not None
-        and rule is not None
         and item.quantity is not None
+        and (rule is not None or supplier)
     )
 
     ensure(ItemFlag.NO_MATCH, not priceable)
@@ -233,7 +253,7 @@ def reconcile_item(item: Item, db: PricingDB) -> Item:
     if priceable:
         assert item.match is not None
         ensure(ItemFlag.LOW_CONFIDENCE_MATCH, item.match.confidence < 0.7)
-        if item.match.price_source == PriceSource.SUPPLIER_PACKAGE:
+        if supplier or item.match.price_source == PriceSource.SUPPLIER_PACKAGE:
             item.status = ItemStatus.SUPPLIER_QUOTE_REQUIRED
         else:
             item.status = ItemStatus.CALCULATED
