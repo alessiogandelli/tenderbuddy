@@ -15,13 +15,14 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight, Minus, MoveHorizontal, Plus, SquareDashed } from "lucide-react";
-import type { Item, PageType, PositionResult } from "../api/types";
+import type { FormField, Item, PageType, PositionResult } from "../api/types";
 import type { ItemState } from "../lib/flags";
 import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
 import { cellAnchor, readTextRuns, type CellAnchor, type TextRun } from "../lib/pageText";
 import { useI18n } from "../i18n";
 import type { ItemPatch } from "./ItemCard";
 import { PriceCell } from "./PriceCell";
+import { FormCell } from "./FormCell";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -78,6 +79,10 @@ interface PageProps {
   onSelect: (lvId: string) => void;
   onEdit: (lvId: string | null) => void;
   onSavePrice: (lvId: string, patch: ItemPatch) => Promise<void>;
+  /** The offer-form blanks on this page, and their values. */
+  formFields: FormField[];
+  formValues: Record<string, number | null>;
+  onSaveFormField: (fieldId: string, value: number | null) => Promise<void>;
   register: (page: number, node: HTMLDivElement | null) => void;
 }
 
@@ -99,6 +104,9 @@ const PdfPage = memo(function PdfPage({
   onSelect,
   onEdit,
   onSavePrice,
+  formFields,
+  formValues,
+  onSaveFormField,
   register,
 }: PageProps) {
   const { t } = useI18n();
@@ -249,6 +257,20 @@ const PdfPage = memo(function PdfPage({
               </button>
             );
           })}
+        {/* The offer form: every blank, filled as the export fills it. */}
+        {formFields.map((field) => (
+          <FormCell
+            key={field.id}
+            field={field}
+            value={formValues[field.id] ?? null}
+            style={rectOf(field.bbox)}
+            editing={editingId === `form:${field.id}`}
+            outlined={showBoxes}
+            onOpen={() => onEdit(`form:${field.id}`)}
+            onClose={() => onEdit(null)}
+            onSave={(value) => onSaveFormField(field.id, value)}
+          />
+        ))}
         {/* The prices are the offer's content: always shown, like the print. */}
         {items.map((item) => {
           if (!item.price_bbox) return null;
@@ -299,6 +321,9 @@ export const PdfViewer = forwardRef<
     /** The bid scenario whose offer prices are written in the price cells. */
     scenario: string;
     onSavePrice: (lvId: string, patch: ItemPatch) => Promise<void>;
+    formFields: FormField[];
+    formValues: Record<string, number | null>;
+    onSaveFormField: (fieldId: string, value: number | null) => Promise<void>;
   }
 >(function PdfViewer(
   {
@@ -315,6 +340,9 @@ export const PdfViewer = forwardRef<
     leading,
     scenario,
     onSavePrice,
+    formFields,
+    formValues,
+    onSaveFormField,
   },
   ref,
 ) {
@@ -391,6 +419,13 @@ export const PdfViewer = forwardRef<
     const sheet = node?.querySelector<HTMLElement>(".pg__sheet");
     return node && sheet ? { top: node.offsetTop + sheet.offsetTop, height: sheet.offsetHeight } : null;
   };
+
+  const fieldsByPage = useMemo(() => {
+    const map = new Map<number, FormField[]>();
+    for (const field of formFields) map.set(field.page, [...(map.get(field.page) ?? []), field]);
+    return map;
+  }, [formFields]);
+  const noFields = useMemo<FormField[]>(() => [], []);
 
   const byPage = useMemo(() => {
     const map = new Map<number, Item[]>();
@@ -604,6 +639,9 @@ export const PdfViewer = forwardRef<
                 onSelect={onSelect}
                 onEdit={setEditingId}
                 onSavePrice={onSavePrice}
+                formFields={fieldsByPage.get(pageNumber) ?? noFields}
+                formValues={formValues}
+                onSaveFormField={onSaveFormField}
                 register={register}
               />
             ))}

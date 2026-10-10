@@ -15,8 +15,9 @@ from pydantic import BaseModel
 
 from .. import storage
 from ..domain.enums import Classification, ItemStatus, PipelineStatus, PipelineStep, PriceSource, Unit
-from ..domain.models import Bando, Item, Match
+from ..domain.models import Bando, Item, Match, OfferForm
 from ..pipeline.extractors import default_reader
+from ..pipeline.offer_form import compute_offer_form, detect_offer_form, fill_offer_form
 from ..pipeline.offer_pdf import OfferEntry, fill_offer
 from ..pipeline.pricing import offer_amount, scenario_margin_pct
 from ..pipeline.pricing_db import get_pricing_db
@@ -60,6 +61,12 @@ class OfferExport(BaseModel):
     lv_ids: List[str]
     # A key of stretch_bid_optimization.scenario_margins_pct; None = target margin.
     scenario: Optional[str] = None
+
+
+class FormFieldPatch(BaseModel):
+    """A value typed into an offer-form field; null goes back to the computed one."""
+
+    value: Optional[float] = None
 
 
 class ParametersPatch(BaseModel):
@@ -158,6 +165,14 @@ def get_bando(bando_id: str) -> dict:
     )
     if stale and bando.pipeline.status == PipelineStatus.DONE:
         recompute(bando)
+        storage.save_bando(bando)
+    # Tenders read before the offer form existed: look for its fields once.
+    pdf = storage.pdf_path(bando_id)
+    if bando.offer_form is None and bando.pipeline.status == PipelineStatus.DONE and pdf.exists():
+        try:
+            bando.offer_form = detect_offer_form(pdf, bando.page_types)
+        except Exception:  # noqa: BLE001 - an unreadable form is just not filled
+            bando.offer_form = OfferForm()
         storage.save_bando(bando)
     return bando.model_dump(mode="json")
 
@@ -305,22 +320,15 @@ def get_pdf(bando_id: str) -> FileResponse:
     return FileResponse(pdf, media_type="application/pdf", filename="%s.pdf" % bando_id)
 
 
-@router.post("/{bando_id}/export/pdf")
-def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
-    """The tender PDF with the selling price of each chosen position written in
-    its price cell. Positions without a price or a price cell are skipped."""
-    bando = _get_or_404(bando_id)
-    pdf = storage.pdf_path(bando_id)
-    if not pdf.exists():
-        raise HTTPException(status_code=404, detail="PDF not available")
+def _offer_lines(bando: Bando, body: OfferExport):
+    """The positions the offer prints, with their amounts: ``(entries, skipped)``.
+
+    Raises KeyError for an unknown scenario. The offer form's Brutto is the sum
+    of exactly these amounts, so the form and the LV always agree."""
     db = get_pricing_db().with_parameters(
         bando.parameters or copy.deepcopy(get_pricing_db().parameters)
     )
-    try:
-        scenario_margin_pct(db, body.scenario)
-    except KeyError:
-        return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
-
+    scenario_margin_pct(db, body.scenario)
     items = {item.lv_id: item for item in bando.items}
     results = {result.lv_id: result for result in bando.position_results}
     entries = []
@@ -338,8 +346,88 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
                 OfferEntry(page=item.source_page, price_bbox=item.price_bbox, amount_chf=amount),
             )
         )
+    return entries, skipped
 
-    filled = fill_offer(pdf, entries)
+
+def _form_values(bando: Bando, entries) -> dict:
+    form = bando.offer_form
+    if form is None or not form.fields:
+        return {}
+    brutto = sum(entry.amount_chf for _, entry in entries)
+    return compute_offer_form(form, brutto, bando.parameters or {})
+
+
+@router.post("/{bando_id}/offer-form/values")
+def offer_form_values(bando_id: str, body: OfferExport) -> dict:
+    """The offer form filled for these positions and this bid scenario, the
+    same values the export writes. Fields left empty are null."""
+    bando = _get_or_404(bando_id)
+    try:
+        entries, _ = _offer_lines(bando, body)
+    except KeyError:
+        return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
+    return {
+        "page": bando.offer_form.page if bando.offer_form else None,
+        "brutto_chf": round(sum(entry.amount_chf for _, entry in entries), 2),
+        "values": _form_values(bando, entries),
+    }
+
+
+# The rates an estimator types on the form are the tender's parameters.
+_RATE_PARAMETERS = {
+    "conditions.rabatt.pct": "rabatt_pct",
+    "conditions.skonto.pct": "skonto_pct",
+}
+
+
+@router.patch("/{bando_id}/offer-form/fields/{field_id}")
+def patch_offer_form_field(bando_id: str, field_id: str, patch: FormFieldPatch) -> dict:
+    """Type a value into an offer-form field (null: back to the computed one).
+    Rabatt % and Skonto % are stored as the tender's offer_conditions."""
+    bando = _get_or_404(bando_id)
+    form = bando.offer_form
+    field = next((f for f in (form.fields if form else []) if f.id == field_id), None)
+    if field is None:
+        raise HTTPException(status_code=404, detail="Field %s not found" % field_id)
+    if patch.value is not None and patch.value < 0:
+        raise HTTPException(status_code=400, detail="The value cannot be negative")
+    if field_id in _RATE_PARAMETERS:
+        if patch.value is not None and patch.value >= 100:
+            raise HTTPException(status_code=400, detail="A rate must be below 100%")
+        base = copy.deepcopy(bando.parameters or get_pricing_db().parameters)
+        conditions = dict(base.get("offer_conditions") or {})
+        conditions[_RATE_PARAMETERS[field_id]] = patch.value or 0.0
+        base["offer_conditions"] = conditions
+        bando.parameters = base
+    else:
+        field.override = patch.value
+    bando.updated_at = now_iso()
+    storage.save_bando(bando)
+    return bando.model_dump(mode="json")
+
+
+@router.post("/{bando_id}/export/pdf")
+def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
+    """The tender PDF with the selling price of each chosen position written in
+    its price cell, and the offer form filled with the same positions.
+    Positions without a price or a price cell are skipped."""
+    bando = _get_or_404(bando_id)
+    pdf = storage.pdf_path(bando_id)
+    if not pdf.exists():
+        raise HTTPException(status_code=404, detail="PDF not available")
+    try:
+        entries, skipped = _offer_lines(bando, body)
+    except KeyError:
+        return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
+
+    values = _form_values(bando, entries)
+    form_written = [0]
+
+    def fill_form(doc) -> None:
+        if bando.offer_form is not None:
+            form_written[0] = fill_offer_form(doc, bando.offer_form, values)
+
+    filled = fill_offer(pdf, entries, also=fill_form)
     stem = re.sub(r"\.pdf$", "", bando.source_file or bando_id, flags=re.I)
     stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem) or bando_id  # header-safe
     return Response(
@@ -349,6 +437,7 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
             "Content-Disposition": 'attachment; filename="%s_offer.pdf"' % stem,
             "X-Offer-Written": str(filled.written),
             "X-Offer-Skipped": str(len(skipped) + len(filled.skipped)),
+            "X-Offer-Form-Written": str(form_written[0]),
         },
     )
 

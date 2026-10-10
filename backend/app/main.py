@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
         # The offer PDF reports its file name and counts in headers.
-        expose_headers=["Content-Disposition", "X-Offer-Written", "X-Offer-Skipped"],
+        expose_headers=["Content-Disposition", "X-Offer-Written", "X-Offer-Skipped", "X-Offer-Form-Written"],
     )
 
     @app.exception_handler(StarletteHTTPException)

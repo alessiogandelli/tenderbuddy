@@ -2,6 +2,7 @@
 // backend returns. See docs/contract/README.md section 6.
 import type {
   Bando,
+  OfferFormValues,
   BandoSummary,
   Item,
   PipelineState,
@@ -112,6 +113,20 @@ export const api = {
 
   parameters: () => request<Record<string, unknown>>("/parameters"),
 
+  /** The offer form filled for these positions and this scenario (as the export writes it). */
+  offerFormValues: (id: string, body: { lv_ids: string[]; scenario: string | null }) =>
+    request<OfferFormValues>(`/bandi/${id}/offer-form/values`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Type a value into an offer-form field; null goes back to the computed value. */
+  patchFormField: (id: string, fieldId: string, value: number | null) =>
+    request<Bando>(`/bandi/${id}/offer-form/fields/${encodeURIComponent(fieldId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    }),
+
   /** The tender PDF with the selling price of the chosen positions written in. */
   exportOfferPdf: async (id: string, body: { lv_ids: string[]; scenario: string | null }) => {
     const response = await fetch(`${BASE}/api/bandi/${id}/export/pdf`, {
@@ -126,6 +141,7 @@ export const api = {
       blob: await response.blob(),
       filename,
       written: Number(response.headers.get("X-Offer-Written") ?? 0),
+      formWritten: Number(response.headers.get("X-Offer-Form-Written") ?? 0),
       skipped: Number(response.headers.get("X-Offer-Skipped") ?? 0),
     };
   },

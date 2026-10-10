@@ -174,6 +174,31 @@ class Detection(BaseModel):
     lv_id: Optional[str] = None  # set when kept, links to the Item
 
 
+class FormField(BaseModel):
+    """One fillable blank of the offer form (a dotted leader in the PDF)."""
+
+    id: str  # "<section>.<row>.<column>", e.g. "conditions.rabatt.pct"
+    page: int
+    bbox: List[float]  # [x0, y0, x1, y1] in 0..1 page space: the leader
+    baseline: float  # the leader's baseline, 0..1 of the page height
+    section: str  # "summary" | "conditions"
+    row: str  # chapter, ohne_npk, total | brutto, rabatt, zt1, skonto, ...
+    column: str  # brutto, netto | eingabe, revidiert | pct
+    kind: str  # "amount" | "percent"
+    label: str = ""
+    # Typed by the estimator; wins over the computed value.
+    override: Optional[float] = None
+
+
+class OfferForm(BaseModel):
+    """The first page classified modulo_offerta and its fillable fields."""
+
+    page: Optional[int] = None
+    fields: List[FormField] = Field(default_factory=list)
+    # Rates the client printed on the form (allg. Bauabzüge, MWST), in %.
+    printed_rates: Dict[str, float] = Field(default_factory=dict)
+
+
 class PipelineState(BaseModel):
     step: PipelineStep = PipelineStep.READ
     status: PipelineStatus = PipelineStatus.PENDING
@@ -231,6 +256,9 @@ class Bando(BaseModel):
     parameters: Optional[Dict[str, object]] = None
     # Additive: AI usage/cost/latency for this run (None when deterministic).
     usage: Optional[Dict[str, object]] = None
+    # Additive: the fillable fields of the first offer-form page (None = not
+    # looked for yet; an empty field list = no form found).
+    offer_form: Optional[OfferForm] = None
 
 
 class BandoSummary(BaseModel):

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { api } from "../api/client";
 import { ItemList, type SelectSource } from "../components/ItemList";
@@ -17,6 +17,8 @@ import { useTender } from "./tenderContext";
  * divider of the resizable split. Selecting an item on either side highlights
  * it on the other.
  */
+const NO_FIELDS: never[] = [];
+
 export function ReviewPage() {
   const { t } = useI18n();
   const { bando, setBando, products, productsById, rules, arriving, scenario } = useTender();
@@ -53,6 +55,37 @@ export function ReviewPage() {
 
   const onPdfSelect = useCallback((lvId: string) => select(lvId, "pdf"), [select]);
   const onShowInPdf = useCallback((lvId: string) => select(lvId, "list"), [select]);
+
+  // The offer form, filled from the final (black) prices: what the export
+  // prints by default. The backend computes it; it follows every change.
+  const [formValues, setFormValues] = useState<Record<string, number | null>>({});
+  const finalIds = useMemo(
+    () => bando.items.filter((item) => ["priced", "manual"].includes(states.get(item.lv_id) ?? "")).map((item) => item.lv_id),
+    [bando.items, states],
+  );
+  const hasForm = (bando.offer_form?.fields.length ?? 0) > 0;
+  useEffect(() => {
+    if (!hasForm) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api
+        .offerFormValues(bando.id, { lv_ids: finalIds, scenario })
+        .then((filled) => {
+          if (!cancelled) setFormValues(filled.values);
+        })
+        .catch(() => undefined);
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [bando, finalIds, scenario, hasForm]);
+  const saveFormField = useCallback(
+    async (fieldId: string, value: number | null) => {
+      setBando(await api.patchFormField(bando.id, fieldId, value));
+    },
+    [bando.id, setBando],
+  );
 
   const save = useCallback(
     async (lvId: string, patch: ItemPatch) => {
@@ -124,6 +157,9 @@ export function ReviewPage() {
                 onPageCount={setPageCount}
                 scenario={scenario}
                 onSavePrice={save}
+                formFields={bando.offer_form?.fields ?? NO_FIELDS}
+                formValues={formValues}
+                onSaveFormField={saveFormField}
                 leading={
                   <button
                     type="button"

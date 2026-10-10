@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, List
+from typing import Callable, Iterable, List, Optional
 
 import fitz  # PyMuPDF
 
@@ -102,8 +102,13 @@ def _write(page: fitz.Page, rect: fitz.Rect, text: str, anchor: _Span | None) ->
     page.insert_text(point, text, fontname=FONT, fontsize=size, color=INK)
 
 
-def fill_offer(pdf_path: Path, entries: Iterable[tuple[str, OfferEntry]]) -> OfferResult:
-    """Write each ``(lv_id, entry)`` amount into a copy of the tender PDF."""
+def fill_offer(
+    pdf_path: Path,
+    entries: Iterable[tuple[str, OfferEntry]],
+    also: Optional[Callable[[fitz.Document], None]] = None,
+) -> OfferResult:
+    """Write each ``(lv_id, entry)`` amount into a copy of the tender PDF;
+    ``also`` can fill more of the same document (the offer form) before saving."""
     doc = fitz.open(pdf_path)
     result = OfferResult(pdf=b"")
     spans_by_page: dict = {}  # read once per page, before anything is written
@@ -122,6 +127,8 @@ def fill_offer(pdf_path: Path, entries: Iterable[tuple[str, OfferEntry]]) -> Off
             anchor = _row_anchor(rect, spans_by_page[entry.page])
             _write(page, rect, format_chf(entry.amount_chf), anchor)
             result.written += 1
+        if also is not None:
+            also(doc)
         result.pdf = doc.tobytes(garbage=3, deflate=True)
     finally:
         doc.close()

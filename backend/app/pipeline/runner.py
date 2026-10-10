@@ -18,7 +18,7 @@ from typing import Callable, List, Optional
 
 from .. import config
 from ..domain.enums import PipelineStatus, PipelineStep
-from ..domain.models import Bando, Overview
+from ..domain.models import Bando, OfferForm, Overview
 from . import steps as steps_pkg
 from .ai import (
     UsageLedger,
@@ -31,6 +31,7 @@ from .ai import (
     match_items_ai,
 )
 from .extractors import PdfReader, default_reader
+from .offer_form import detect_offer_form
 from .pricing import coverage_of, reconcile_item
 from .pricing_db import PricingDB, get_pricing_db
 from ..util import now_iso
@@ -91,6 +92,14 @@ def _classify_pages(
         except Exception:  # noqa: BLE001 - classification must never lose pages
             pass
     return steps_pkg.classify_pages_deterministic(document)
+
+
+def _detect_offer_form(pdf_path: Path, page_types: List) -> OfferForm:
+    """The fillable fields of the first offer-form page; never fails the run."""
+    try:
+        return detect_offer_form(pdf_path, page_types)
+    except Exception:  # noqa: BLE001 - a form we cannot read is just not filled
+        return OfferForm()
 
 
 def _parse_items(
@@ -222,6 +231,7 @@ def run_pipeline(
         )
         bando.page_types = _classify_pages(document, use_ai, usage, on_progress=pages_read)
         bando.pipeline.pages_read = document.page_count
+        bando.offer_form = _detect_offer_form(pdf_path, bando.page_types)
 
         emit(PipelineStep.PARSE, PipelineStatus.RUNNING, message="Extracting positions")
         items, detections = _parse_items(

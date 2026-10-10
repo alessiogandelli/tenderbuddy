@@ -31,7 +31,7 @@ export function ExportDialog({
   const scenarios = bando.recommended_bid_range?.scenarios ?? [];
   const [includeCheck, setIncludeCheck] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ written: number; skipped: number } | null>(null);
+  const [done, setDone] = useState<{ written: number; skipped: number; formWritten: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function ExportDialog({
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      setDone({ written: file.written, skipped: file.skipped });
+      setDone({ written: file.written, skipped: file.skipped, formWritten: file.formWritten });
     } catch {
       setError(t("export.error"));
     } finally {
@@ -198,6 +198,7 @@ export function ExportDialog({
           <p className="xdlg__done" role="status">
             <CheckCircle2 size={16} aria-hidden /> {t("export.done", { count: done.written })}
             {done.skipped > 0 && ` ${t("export.skipped", { count: done.skipped })}`}
+            {done.formWritten > 0 && ` ${t("export.formDone", { count: done.formWritten, page: bando.offer_form?.page ?? "" })}`}
           </p>
         )}
         {error && (

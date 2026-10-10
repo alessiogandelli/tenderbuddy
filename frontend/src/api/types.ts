@@ -224,6 +224,35 @@ export interface BandoTotals {
   indicative_price_chf: number;
 }
 
+/** One fillable blank of the offer form (a dotted leader in the PDF). */
+export interface FormField {
+  id: string;
+  page: number;
+  bbox: number[];
+  /** The blank's baseline, 0..1 of the page height. */
+  baseline: number;
+  section: "summary" | "conditions" | string;
+  row: string;
+  column: string;
+  kind: "amount" | "percent";
+  label: string;
+  /** Typed by the estimator; wins over the computed value. */
+  override: number | null;
+}
+
+export interface OfferForm {
+  page: number | null;
+  fields: FormField[];
+  printed_rates: Record<string, number>;
+}
+
+/** The offer form filled for a set of positions and a bid scenario. */
+export interface OfferFormValues {
+  page: number | null;
+  brutto_chf: number;
+  values: Record<string, number | null>;
+}
+
 export interface Bando {
   schema_version: string;
   id: string;
@@ -246,6 +275,7 @@ export interface Bando {
   overview: Overview | null;
   parameters: ProjectParameters | null;
   usage: Usage | null;
+  offer_form?: OfferForm | null;
 }
 
 export interface BandoSummary {

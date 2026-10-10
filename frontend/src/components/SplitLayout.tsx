@@ -61,6 +61,12 @@ export function SplitLayout({
   const groupRef = useRef<ImperativePanelGroupHandle | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
+  // Mounted once the width is known, then never unmounted: a width that drops
+  // to 0 for a moment (window resize, print, devtools) must not reload the PDF.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (width > 0) setMounted(true);
+  }, [width]);
   // Only the collapsed flags are state: storing the whole layout would
   // re-render both sides on every pointer move of a drag.
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -119,7 +125,7 @@ export function SplitLayout({
 
   return (
     <div className="split" ref={wrapRef}>
-      {width > 0 && (
+      {(mounted || width > 0) && (
       <PanelGroup
         ref={groupRef}
         direction="horizontal"

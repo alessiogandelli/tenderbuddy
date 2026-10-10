@@ -69,6 +69,12 @@ single port.
     (not printed until confirmed), empty when there is no price. Clicking a
     cell opens an editor to type the printed total, confirm an amber price, or
     go back to the computed price.
+  - *Offer form*: the blanks of the first page classified "offer form" (the
+    CRB conditions form) are filled the same way: Brutto = the sum of the final
+    prices, then Rabatt, Skonto, Bauabzüge, MWST and Netto, computed by the
+    backend. Every blank is editable on the page; Rabatt % and Skonto % typed
+    there become the tender's parameters; the client's "Revidiert" column stays
+    empty. The export prints the same values.
 - **Parameters** (`/bandi/:id/parameters`) — every pricing parameter in
   collapsible groups with − / + steppers; each change re-prices the tender.
 - **Price & bid** (`/bandi/:id/price`) — one offer: the chosen strategy's
