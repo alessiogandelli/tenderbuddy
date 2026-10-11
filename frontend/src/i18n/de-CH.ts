@@ -14,6 +14,10 @@ export const deCH: Messages = {
   language: {
     label: "Sprache",
   },
+  demo: {
+    label: "Offline-Beispiel",
+    hint: "Das Backend ist nicht erreichbar: die App zeigt das vorbereitete Beispiel. Klicken, um erneut zu verbinden.",
+  },
   nav: {
     newTender: "Neue Ausschreibung",
   },
@@ -172,6 +176,7 @@ export const deCH: Messages = {
     skipped_one: "{count} ausgelassen.",
     skipped_other: "{count} ausgelassen.",
     error: "Das PDF konnte nicht erstellt werden. Bitte erneut versuchen.",
+    disabled: "Der Export braucht das laufende Backend.",
     csv: "CSV",
     download_one: "PDF herunterladen ({count} Preis)",
     download_other: "PDF herunterladen ({count} Preise)",

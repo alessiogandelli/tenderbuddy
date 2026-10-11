@@ -16,6 +16,10 @@ export const en = {
   language: {
     label: "Language",
   },
+  demo: {
+    label: "Offline example",
+    hint: "The backend is unreachable: the app is showing the preloaded example. Click to reconnect.",
+  },
   nav: {
     newTender: "New tender",
   },
@@ -174,6 +178,7 @@ export const en = {
     skipped_one: "{count} left out.",
     skipped_other: "{count} left out.",
     error: "The PDF could not be created. Try again.",
+    disabled: "Export needs the live backend.",
     csv: "CSV",
     download_one: "Download PDF ({count} price)",
     download_other: "Download PDF ({count} prices)",

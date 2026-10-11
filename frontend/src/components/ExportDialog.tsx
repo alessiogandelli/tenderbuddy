@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
 import { api } from "../api/client";
+import { useConnection } from "../api/connection";
 import type { Bando } from "../api/types";
 import { itemState, type ItemState } from "../lib/flags";
 import { formatNumber } from "../lib/format";
@@ -27,6 +28,7 @@ export function ExportDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const offline = useConnection() === "demo";
   const ref = useRef<HTMLDialogElement | null>(null);
   const scenarios = bando.recommended_bid_range?.scenarios ?? [];
   const [includeCheck, setIncludeCheck] = useState(false);
@@ -206,12 +208,25 @@ export function ExportDialog({
             {error}
           </p>
         )}
+        {offline && <p className="xdlg__warn">{t("export.disabled")}</p>}
 
         <footer className="xdlg__foot">
-          <a className="btn btn--ghost" href={api.exportUrl(bando.id, "csv")}>
-            <FileSpreadsheet size={16} aria-hidden /> {t("export.csv")}
-          </a>
-          <button type="button" className="btn btn--primary" disabled={busy || ids.length === 0} onClick={() => void download()}>
+          {offline ? (
+            <button type="button" className="btn btn--ghost" disabled title={t("export.disabled")}>
+              <FileSpreadsheet size={16} aria-hidden /> {t("export.csv")}
+            </button>
+          ) : (
+            <a className="btn btn--ghost" href={api.exportUrl(bando.id, "csv")}>
+              <FileSpreadsheet size={16} aria-hidden /> {t("export.csv")}
+            </a>
+          )}
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || ids.length === 0 || offline}
+            title={offline ? t("export.disabled") : undefined}
+            onClick={() => void download()}
+          >
             {busy ? <Loader2 size={16} className="spin" aria-hidden /> : <Download size={16} aria-hidden />}
             {t("export.download", { count: ids.length })}
           </button>

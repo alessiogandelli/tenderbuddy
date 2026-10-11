@@ -17,15 +17,20 @@ from .storage import store as storage
 
 class SpaStaticFiles(StaticFiles):
     """Static files with an SPA fallback: unknown non-API paths serve index.html,
-    so react-router deep links (``/bandi/:id``) survive a refresh on one port."""
+    so react-router deep links (``/bandi/:id``) survive a refresh on one port.
+
+    ``html=True`` makes Starlette serve a ``404.html`` (shipped for GitHub Pages,
+    which has no rewrites) with a 404 status; here the app shell is preferred so
+    the single-port demo answers deep links with 200.
+    """
 
     async def get_response(self, path: str, scope):
-        try:
-            return await super().get_response(path, scope)
-        except StarletteHTTPException as exc:
-            if exc.status_code == 404 and not scope["path"].startswith("/api"):
-                return FileResponse(Path(self.directory) / "index.html")
-            raise
+        response = await super().get_response(path, scope)
+        if response.status_code == 404 and not scope["path"].startswith("/api"):
+            index = Path(self.directory) / "index.html"
+            if index.exists():
+                return FileResponse(index)
+        return response
 
 
 def create_app() -> FastAPI:

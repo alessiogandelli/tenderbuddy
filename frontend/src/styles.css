@@ -192,6 +192,14 @@ button:disabled { cursor: default; }
   transition: background-color 0.15s, transform 0.15s;
 }
 .topbar__new:hover { background: #fff; transform: translateY(-1px); }
+/* Offline: the backend is unreachable and the preloaded example is showing. */
+.topbar__demo {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px 0 11px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: var(--warn-bg);
+  color: var(--warn); font-weight: 800; font-size: 13.5px; white-space: nowrap; cursor: pointer;
+  transition: background-color 0.15s, transform 0.15s;
+}
+.topbar__demo:hover { transform: translateY(-1px); }
 
 /* language: a globe with the current code; the four languages drop down from it */
 .langmenu { position: relative; }

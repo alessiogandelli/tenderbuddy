@@ -41,9 +41,12 @@ for dubious cases.
 
 ## Points to say out loud
 
-- **Nothing is mocked.** The pricing maths is verified to the cent against
+- **Nothing is mocked — in the live demo.** The pricing maths is verified to the cent against
   `data/expected_output_example.json`; extraction is measured against the 22
-  verified positions with the same harness (`bando-eval`).
+  verified positions with the same harness (`bando-eval`). (The app also has an
+  *offline example* it falls back to when the backend is unreachable; it is
+  labelled "Offline example" in the top bar and replays the same flow on the
+  bundled `bnd_eb09ac9d83ea` tender with no backend.)
 - **AI is interchangeable.** Extraction and matching are two adapters behind the
   same phases; with the key off the pipeline runs identically, locally.
 - **Uncertainty is visible.** The positions that require a person are
@@ -62,3 +65,48 @@ for dubious cases.
 | Italian tender document (188 pages) | 0 → 291 positions |
 
 Full detail and method in [`benchmark.md`](benchmark.md).
+
+## Remote demo — GitHub Pages + Cloudflare Tunnel
+
+The frontend is deployed to GitHub Pages; the backend runs on the demo laptop and
+is published through a Cloudflare Tunnel. When the laptop (or the tunnel) is
+down, the deployed app drops to the bundled **offline example** so the link
+always shows something.
+
+**One-time setup**
+
+1. Repo → Settings → Pages → **Source: GitHub Actions**.
+2. (Optional) Repo → Settings → Variables → Actions → `VITE_API_BASE`, if the
+   tunnel hostname ever changes (default is `https://tenderbuddy.gandelli.dev`).
+3. Cloudflare: point the tunnel hostname at the local backend
+   (`http://127.0.0.1:8000`).
+
+**Each demo run**
+
+```bash
+# backend, with CORS open to the Pages origin
+cd backend
+BANDO_ALLOWED_ORIGINS=https://alessiogandelli.github.io \
+  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# tunnel (named tunnel already configured for tenderbuddy.gandelli.dev)
+cloudflared tunnel run <tunnel-name>
+```
+
+Push to `main` (or run the *Deploy frontend to GitHub Pages* workflow) to publish
+the frontend at <https://alessiogandelli.github.io/tenderbuddy/>. A push rebuilds
+with `VITE_BASE=/tenderbuddy/` and `VITE_API_BASE=<tunnel>` baked in.
+
+**The offline example.** `frontend/public/demo/` holds a real processed tender
+(`bnd_eb09ac9d83ea`, 202 pages, 245 positions), the pricing dataset and the
+tender PDF; the app replays the pipeline loading animation from a scripted
+timeline (see `frontend/src/api/demo.ts`). It is committed, so no backend is
+needed. Regenerate it after a pipeline change with:
+
+```bash
+python backend/scripts/export_demo_fixtures.py [bando_id]
+```
+
+**Caveats.** Export (PDF/CSV) needs the live backend and is disabled offline.
+In offline mode, edits are kept in memory only (lost on reload).
+

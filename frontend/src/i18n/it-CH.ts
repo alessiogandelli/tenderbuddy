@@ -13,6 +13,10 @@ export const itCH: Messages = {
   language: {
     label: "Lingua",
   },
+  demo: {
+    label: "Esempio offline",
+    hint: "Il backend non è raggiungibile: l'app mostra l'esempio precaricato. Clicca per riconnetterti.",
+  },
   nav: {
     newTender: "Nuovo bando",
   },
@@ -171,6 +175,7 @@ export const itCH: Messages = {
     skipped_one: "{count} lasciata fuori.",
     skipped_other: "{count} lasciate fuori.",
     error: "Impossibile creare il PDF. Riprova.",
+    disabled: "L'esportazione richiede il backend online.",
     csv: "CSV",
     download_one: "Scarica il PDF ({count} prezzo)",
     download_other: "Scarica il PDF ({count} prezzi)",

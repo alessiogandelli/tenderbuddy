@@ -1,11 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Check, ChevronDown, Globe, Plus } from "lucide-react";
+import { Check, ChevronDown, CloudOff, Globe, Plus } from "lucide-react";
 import { LANGUAGES, useI18n } from "../i18n";
+import { probeConnection, useConnection } from "../api/connection";
 import enderLockup from "../assets/ender-lockup-dark.svg";
 
 /** Where a page can render its own title, in the middle of the top bar. */
 export const TOPBAR_SLOT = "topbar-slot";
+
+/**
+ * Shown while the backend is unreachable: the app is serving the preloaded
+ * example. Clicking re-probes the tunnel and reloads when it answers again.
+ */
+function DemoBadge() {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      className="topbar__demo"
+      title={t("demo.hint")}
+      onClick={() => {
+        void probeConnection(true).then((result) => {
+          if (result === "live") window.location.reload();
+        });
+      }}
+    >
+      <CloudOff size={15} aria-hidden />
+      {t("demo.label")}
+    </button>
+  );
+}
+
 
 /** A globe with the current language's code; the four languages open from it. */
 function LanguageMenu() {
@@ -87,7 +112,13 @@ function LanguageMenu() {
 
 export function Layout() {
   const { t } = useI18n();
+  const mode = useConnection();
   const onUpload = useLocation().pathname === "/";
+
+  // One probe at boot decides live vs the preloaded example.
+  useEffect(() => {
+    void probeConnection();
+  }, []);
 
   return (
     <div className="app">
@@ -99,6 +130,7 @@ export function Layout() {
         {/* A tender page puts its title here, centred on the page (see TenderTitle). */}
         <div id={TOPBAR_SLOT} className="topbar__slot" />
         <div className="topbar__right">
+          {mode === "demo" && <DemoBadge />}
           <LanguageMenu />
           {!onUpload && (
             <Link to="/" className="topbar__new">

@@ -13,6 +13,10 @@ export const frCH: Messages = {
   language: {
     label: "Langue",
   },
+  demo: {
+    label: "Exemple hors ligne",
+    hint: "Le backend est injoignable : l'app affiche l'exemple préchargé. Cliquez pour vous reconnecter.",
+  },
   nav: {
     newTender: "Nouvel appel d'offres",
   },
@@ -171,6 +175,7 @@ export const frCH: Messages = {
     skipped_one: "{count} laissée de côté.",
     skipped_other: "{count} laissées de côté.",
     error: "Le PDF n'a pas pu être créé. Réessayez.",
+    disabled: "L'export nécessite le backend en ligne.",
     csv: "CSV",
     download_one: "Télécharger le PDF ({count} prix)",
     download_other: "Télécharger le PDF ({count} prix)",
