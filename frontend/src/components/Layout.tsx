@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Check, ChevronDown, Globe, Plus } from "lucide-react";
 import { LANGUAGES, useI18n } from "../i18n";
+import enderLockup from "../assets/ender-lockup-dark.svg";
 
 /** Where a page can render its own title, in the middle of the top bar. */
 export const TOPBAR_SLOT = "topbar-slot";
@@ -91,11 +92,9 @@ export function Layout() {
   return (
     <div className="app">
       <header className="topbar">
-        <Link to="/" className="topbar__brand">
-          <span className="topbar__mark" aria-hidden>
-            TB
-          </span>
-          <span className="topbar__name">TenderBuddy</span>
+        <Link to="/" className="topbar__brand" aria-label="Ender">
+          {/* The brand kit's lockup for navy: white wordmark, mint end mark. */}
+          <img src={enderLockup} alt="Ender" className="topbar__logo" width={84} height={21} />
         </Link>
         {/* A tender page puts its title here, centred on the page (see TenderTitle). */}
         <div id={TOPBAR_SLOT} className="topbar__slot" />

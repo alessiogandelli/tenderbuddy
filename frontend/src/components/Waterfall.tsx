@@ -10,16 +10,16 @@ const GHOST_HEIGHT = 28;
 const FULL_LABEL_SLOT = 104; // narrower columns get compact labels (1'126k)
 
 export const COLUMN_COLORS: Record<ColumnKey, string> = {
-  material: "#1f8a70",
-  labour: "#6fbf9c",
-  unpriced: "#c2413b",
+  material: "#1b7350",
+  labour: "#70bd95",
+  unpriced: "#af2a20",
   project: "#e89a2c",
-  direct: "#4f6f86",
-  overhead: "#8a97a3",
+  direct: "#4f6875",
+  overhead: "#9db1ba",
   transport: "#e2b23a",
-  baseline: "#4f6f86",
-  margin: "#2b4a63",
-  offer: "#17796a",
+  baseline: "#4f6875",
+  margin: "#1a6b9f",
+  offer: "#002439",
 };
 
 /** Where clicking a part of the chart leads in the item list. */

@@ -18,8 +18,8 @@ export const PAGE_TYPE_ORDER: PageType[] = [
 ];
 
 export const PAGE_TYPE_COLORS: Record<PageType, string> = {
-  lv_table: "#16876d",
-  lv_other: "#6cc4a1",
+  lv_table: "#1b7350",
+  lv_other: "#70bd95",
   preziario: "#e7a73a",
   modulo_offerta: "#c7702f",
   specifications: "#3f6fd1",

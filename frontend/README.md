@@ -104,6 +104,14 @@ single port.
   halves of the priced positions, as the grouped legend shows. Bars grow in on
   entry, arcs sweep in and slide when the strategy changes.
 
+## Brand
+
+The app is **Ender** ("The end of tenders."), from `../ender-brand-kit`: the
+on-navy lockup in the top bar (`src/assets/ender-lockup-dark.svg`), the icon as
+favicon (`public/`), and the kit's colours as the tokens at the top of
+`src/styles.css` (ink, night, mint, teal, paper, slate and the status pairs).
+Fonts (Manrope) and rounded corners are still the app's own.
+
 ## Languages
 
 The UI ships in Switzerland's three main official languages — **German

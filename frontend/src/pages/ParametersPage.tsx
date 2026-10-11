@@ -47,11 +47,11 @@ const OPEN_KEY = "tenderbuddy.params.open";
 
 /** How each group looks, and which parts of the offer it moves. */
 const GROUP_META: Record<string, { icon: LucideIcon; color: string; parts: PartKey[] }> = {
-  productivity: { icon: HardHat, color: "#17796a", parts: ["labour"] },
+  productivity: { icon: HardHat, color: "#1b7350", parts: ["labour"] },
   allowances: { icon: Coins, color: "#d9822b", parts: ["material", "transport"] },
-  projectCosts: { icon: ClipboardList, color: "#3d7fb8", parts: ["project"] },
-  commercial: { icon: Percent, color: "#2b4a63", parts: ["overhead", "margin"] },
-  bid: { icon: Trophy, color: "#5b54c8", parts: ["margin"] },
+  projectCosts: { icon: ClipboardList, color: "#1a6b9f", parts: ["project"] },
+  commercial: { icon: Percent, color: "#002439", parts: ["overhead", "margin"] },
+  bid: { icon: Trophy, color: "#634a99", parts: ["margin"] },
 };
 
 /** One change made on this page: a value, before and after, and what it did to the offer. */

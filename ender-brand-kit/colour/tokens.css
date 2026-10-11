@@ -1,0 +1,78 @@
+/* Ender design tokens — endorsed by Equans (navy + mint family).
+   Every text/background pair below meets WCAG AA (>= 4.5:1).
+   Light values on :root, dark values redefined for system dark mode and [data-theme="dark"]. */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap");
+
+:root {
+  /* Brand */
+  --ender-ink: #002439;          /* Equans navy: primary text, header, mark ground */
+  --ender-night: #082b3d;        /* deeper surface for hero / price tile */
+  --ender-mint: #70bd95;         /* Equans mint: accent fills, accent text on navy */
+  --ender-teal: #1b7350;         /* accessible mint for text/links on light */
+  --ender-mist: #e6f3ec;         /* tinted surface, selected rows */
+  --ender-signal: #1a6b9f;       /* info, links in data views */
+
+  /* Neutrals (biased toward the navy/mint hue) */
+  --ender-bg: #f4f7f6;
+  --ender-surface: #ffffff;
+  --ender-text: #002439;
+  --ender-muted: #4f6875;
+  --ender-line: #d3dedb;
+  --ender-line-strong: #9db1ba;
+
+  /* Status — one pair (text on fill) per pricing status from the challenge */
+  --ender-calculated: #1d6a43;        --ender-calculated-bg: #e2f2e9;
+  --ender-supplier: #1a5c91;          --ender-supplier-bg: #e2eef8;
+  --ender-assumption: #83510a;        --ender-assumption-bg: #faefd9;
+  --ender-review: #af2a20;            --ender-review-bg: #fbe7e4;
+  --ender-insufficient: #634a99;      --ender-insufficient-bg: #eee9f7;
+  --ender-out-of-scope: #4a5960;      --ender-out-of-scope-bg: #e9eef0;
+  --ender-non-priceable: #5a666d;     --ender-non-priceable-bg: #f2f4f5;
+
+  /* Type */
+  --ender-font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --ender-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --ender-text-xs: 0.75rem;   /* 12 — captions, page refs */
+  --ender-text-sm: 0.875rem;  /* 14 — table cells */
+  --ender-text-md: 1rem;      /* 16 — body */
+  --ender-text-lg: 1.25rem;   /* 20 — section titles */
+  --ender-text-xl: 1.75rem;   /* 28 — KPI values */
+  --ender-text-2xl: 2.75rem;  /* 44 — headline price */
+
+  /* Shape */
+  --ender-radius: 4px;
+  --ender-radius-sm: 2px;
+  --ender-radius-pill: 2px;   /* chips stay square-cornered */
+  --ender-shadow: 0 1px 2px rgb(0 36 57 / 0.06), 0 4px 14px rgb(0 36 57 / 0.06);
+  --ender-shadow-lg: 0 10px 34px rgb(0 36 57 / 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ender-bg: #061a26;  --ender-surface: #0c2534;  --ender-text: #e4eeea;  --ender-muted: #93aab4;
+    --ender-line: #1d3a4a;  --ender-line-strong: #36586a;
+    --ender-teal: #7fcba3;  --ender-mist: #0f3326;  --ender-signal: #6fb4e6;
+    --ender-calculated: #86d4a9;   --ender-calculated-bg: #0f3326;
+    --ender-supplier: #8cc2ee;     --ender-supplier-bg: #0f2c44;
+    --ender-assumption: #f0c27a;   --ender-assumption-bg: #3a2a10;
+    --ender-review: #f3958b;       --ender-review-bg: #3e1714;
+    --ender-insufficient: #c3b2ee; --ender-insufficient-bg: #2a2142;
+    --ender-out-of-scope: #b5c2c8; --ender-out-of-scope-bg: #1e2e37;
+    --ender-non-priceable: #a3afb5; --ender-non-priceable-bg: #18262e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ender-bg: #061a26;  --ender-surface: #0c2534;  --ender-text: #e4eeea;  --ender-muted: #93aab4;
+  --ender-line: #1d3a4a;  --ender-line-strong: #36586a;
+  --ender-teal: #7fcba3;  --ender-mist: #0f3326;  --ender-signal: #6fb4e6;
+  --ender-calculated: #86d4a9;   --ender-calculated-bg: #0f3326;
+  --ender-supplier: #8cc2ee;     --ender-supplier-bg: #0f2c44;
+  --ender-assumption: #f0c27a;   --ender-assumption-bg: #3a2a10;
+  --ender-review: #f3958b;       --ender-review-bg: #3e1714;
+  --ender-insufficient: #c3b2ee; --ender-insufficient-bg: #2a2142;
+  --ender-out-of-scope: #b5c2c8; --ender-out-of-scope-bg: #1e2e37;
+  --ender-non-priceable: #a3afb5; --ender-non-priceable-bg: #18262e;
+  color-scheme: dark;
+}

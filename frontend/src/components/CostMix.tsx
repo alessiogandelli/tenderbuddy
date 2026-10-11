@@ -7,7 +7,7 @@ import { Donut, type DonutSegment } from "./Donut";
 import { COLUMN_COLORS, type ItemsFilter } from "./Waterfall";
 
 /** Parent arcs (inner ring) are a lighter tint of their parts (outer ring). */
-const PARENT_COLORS = { priced: "#a9d8c5", project: "#f3cd94", surcharges: "#c9d1d7", margin: "#93a8b9" };
+const PARENT_COLORS = { priced: "#b3dcc6", project: "#f3cd94", surcharges: "#d3dedb", margin: "#a6c7dd" };
 
 type Key = "priced" | "verified" | "check" | "unpriced" | "surcharges" | ColumnKey;
 
