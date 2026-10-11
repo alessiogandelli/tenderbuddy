@@ -96,6 +96,14 @@ OVERVIEW_MODEL = os.environ.get("BANDO_OVERVIEW_MODEL", EXTRACT_MODEL).strip()
 OVERVIEW_EFFORT = os.environ.get("BANDO_OVERVIEW_EFFORT", "low").strip().lower()
 OVERVIEW_MAX_CHARS = int(os.environ.get("BANDO_OVERVIEW_MAX_CHARS", "90000"))
 
+# Identity: a quick Luna pass over the OPENING pages only, to write the archive
+# title and a one-line description ("ventilation system in this school"). It runs
+# on every upload (independent of `deep`), so it stays small: few pages, low effort.
+TITLE_MODEL = os.environ.get("BANDO_TITLE_MODEL", EXTRACT_MODEL).strip()
+TITLE_EFFORT = os.environ.get("BANDO_TITLE_EFFORT", "low").strip().lower()
+TITLE_MAX_PAGES = int(os.environ.get("BANDO_TITLE_MAX_PAGES", "5"))
+TITLE_MAX_CHARS = int(os.environ.get("BANDO_TITLE_MAX_CHARS", "12000"))
+
 
 def ai_enabled() -> bool:
     """Whether the AI path should be used for this process."""

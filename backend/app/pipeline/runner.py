@@ -14,7 +14,7 @@ from __future__ import annotations
 import copy
 import time
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 from .. import config
 from ..domain.enums import PipelineStatus, PipelineStep
@@ -40,6 +40,27 @@ OnStep = Callable[[PipelineStep, PipelineStatus, Optional[str]], None]
 
 # Page progress is saved mid-step for the UI, throttled to spare the disk.
 PROGRESS_SAVE_INTERVAL_S = 0.25
+
+
+def _dump(value: Any) -> Any:
+    """Turn pydantic models (and containers of them) into JSON-ready dicts."""
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, list):
+        return [_dump(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _dump(item) for key, item in value.items()}
+    return value
+
+
+def _artifact(artifacts: Optional[Any], step: PipelineStep, payload: Any) -> None:
+    """Persist a step's output; a storage hiccup must never fail the run."""
+    if artifacts is None:
+        return
+    try:
+        artifacts.write(step, _dump(payload))
+    except Exception:  # noqa: BLE001 - artifacts are best-effort
+        pass
 
 
 def _with_bando_parameters(bando: Bando, db: PricingDB) -> PricingDB:
@@ -171,6 +192,7 @@ def run_pipeline(
     on_step: Optional[OnStep] = None,
     use_ai: Optional[bool] = None,
     deep: bool = False,
+    artifacts: Optional[Any] = None,
 ) -> Bando:
     """Run the full extraction pipeline in place and return the Bando.
 
@@ -227,6 +249,10 @@ def run_pipeline(
         document = steps_pkg.read_pdf(reader, pdf_path)
         bando.page_count = document.page_count
         bando.pipeline.pages_total = document.page_count
+        _artifact(artifacts, PipelineStep.READ, {
+            "page_count": document.page_count,
+            "pages": [{"number": p.number, "text": p.text} for p in document.pages],
+        })
 
         emit(
             PipelineStep.CLASSIFY_PAGES,
@@ -236,6 +262,7 @@ def run_pipeline(
         bando.page_types = _classify_pages(document, use_ai, usage, on_progress=pages_read)
         bando.pipeline.pages_read = document.page_count
         bando.offer_form = _detect_offer_form(pdf_path, bando.page_types)
+        _artifact(artifacts, PipelineStep.CLASSIFY_PAGES, {"page_types": bando.page_types})
 
         emit(PipelineStep.PARSE, PipelineStatus.RUNNING, message="Extracting positions")
         items, detections = _parse_items(
@@ -245,6 +272,11 @@ def run_pipeline(
         bando.pipeline.lv_pages_done = bando.pipeline.lv_pages_total
         bando.detections = detections
         bando.pipeline.item_count = len(items)
+        _artifact(artifacts, PipelineStep.PARSE, {
+            "item_count": len(items),
+            "items": items,
+            "detections": detections,
+        })
 
         emit(
             PipelineStep.OVERVIEW,
@@ -254,30 +286,39 @@ def run_pipeline(
         bando.overview = steps_pkg.build_overview(
             document, items, db, use_ai=use_ai and deep, usage=usage
         )
+        _artifact(artifacts, PipelineStep.OVERVIEW, {"overview": bando.overview})
 
         emit(
             PipelineStep.CLASSIFY,
             PipelineStatus.RUNNING,
             message="%d positions extracted" % len(items),
         )
-        title, description, classification = steps_pkg.classify_document(
-            document, bando.source_file or ""
+        title, description, classification = steps_pkg.build_classification(
+            document, bando.source_file or "", use_ai=use_ai, usage=usage
         )
         # Only fill in when the user has not set them.
         bando.title = bando.title or title
         bando.description = bando.description or description
         bando.classification = classification
+        _artifact(artifacts, PipelineStep.CLASSIFY, {
+            "title": bando.title,
+            "description": bando.description,
+            "classification": bando.classification,
+        })
 
         emit(PipelineStep.CANONICALIZE, PipelineStatus.RUNNING, message="Normalising")
         items = steps_pkg.canonicalize_items(items)
+        _artifact(artifacts, PipelineStep.CANONICALIZE, {"items": items})
 
         emit(PipelineStep.MATCH, PipelineStatus.RUNNING, message="Catalogue match")
         _match_items(items, db, use_ai, usage, context=_match_context(bando.overview), deep=deep)
+        _artifact(artifacts, PipelineStep.MATCH, {"items": items})
 
         bando.items = items
 
         emit(PipelineStep.PRICE, PipelineStatus.RUNNING, message="Computing price")
         bando.position_results = steps_pkg.price_items(items, db)
+        _artifact(artifacts, PipelineStep.PRICE, {"position_results": bando.position_results})
 
         emit(PipelineStep.AGGREGATE, PipelineStatus.RUNNING, message="Summary and bid")
         bando.summary, bando.recommended_bid_range = steps_pkg.aggregate(
@@ -288,6 +329,16 @@ def run_pipeline(
         bando.updated_at = now_iso()
 
         emit(PipelineStep.AGGREGATE, PipelineStatus.DONE, message="Completed")
+        _artifact(artifacts, PipelineStep.AGGREGATE, {
+            "summary": bando.summary,
+            "recommended_bid_range": bando.recommended_bid_range,
+            "coverage": bando.coverage,
+        })
+        if artifacts is not None:
+            try:
+                artifacts.write_result(bando)
+            except Exception:  # noqa: BLE001 - artifacts are best-effort
+                pass
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI as a failure
         emit(bando.pipeline.step, PipelineStatus.FAILED, str(exc))
         raise

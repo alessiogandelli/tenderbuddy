@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 
 from ...domain.enums import Classification
 from ..extractors import Document
+from ..ai.usage import UsageLedger
 
 _KEYWORDS = {
     Classification.VENTILATION: (
@@ -84,5 +85,35 @@ def classify_document(
     if project:
         parts.append(project)
     description = " — ".join(parts) if parts else None
+
+    return None, description, classification
+
+
+def build_classification(
+    document: Document,
+    source_file: str,
+    *,
+    use_ai: bool,
+    usage: Optional[UsageLedger] = None,
+) -> Tuple[Optional[str], Optional[str], Classification]:
+    """Classify the Bando, naming it with a quick AI read of the opening pages.
+
+    The classification itself stays deterministic (a canonical English enum);
+    only the title and the one-line description come from Luna, and any failure
+    falls back to the heuristic classifier so a run never breaks on the model.
+    """
+    _, description, classification = classify_document(document, source_file)
+
+    if use_ai:
+        try:
+            from ..ai.classify import document_identity
+
+            data = document_identity(document, usage=usage)
+            title = data.get("title") or None
+            ai_description = data.get("description") or None
+            if title or ai_description:
+                return title, ai_description or description, classification
+        except Exception:  # noqa: BLE001 - identity must never fail the run
+            pass
 
     return None, description, classification

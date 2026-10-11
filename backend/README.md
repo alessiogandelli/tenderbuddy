@@ -69,7 +69,7 @@ data rather than taste.
 | Variable | Default | Meaning |
 |---|---|---|
 | `BANDO_DATA_DIR` | `../data` | where the pricing dataset is read from |
-| `BANDO_RUNTIME_DIR` | `./runtime` | where Bandi and uploaded PDFs are stored |
+| `BANDO_RUNTIME_DIR` | `./runtime` | where the per-tender folders (Bando, PDF, steps, result) are stored |
 | `BANDO_ALLOWED_ORIGINS` | `http://localhost:5173,...` | CORS origins for the frontend |
 | `OPENAI_API_KEY` | *(empty)* | enables the AI engines; empty = deterministic only |
 | `BANDO_AI_MODE` | `auto` | `auto` \| `off` \| `forced` |
@@ -81,6 +81,9 @@ data rather than taste.
 | `BANDO_SEMANTIC_WEIGHT` | `0.7` | cosine vs. lexical blend for candidate ranking |
 | `BANDO_CANDIDATE_K` | `30` | candidate products offered to the matcher per position |
 | `BANDO_ESCALATE_MODEL` / `_EFFORT` | `gpt-6-astra` / `medium` | uncertain-case escalation |
+| `BANDO_OVERVIEW_MODEL` / `_EFFORT` | `gpt-6-luna` / `low` | whole-document overview (deep pass) |
+| `BANDO_TITLE_MODEL` / `_EFFORT` | `gpt-6-luna` / `low` | identity read of the opening pages |
+| `BANDO_TITLE_MAX_PAGES` / `_MAX_CHARS` | `5` / `12000` | how much of the opening is read for the title |
 | `BANDO_AI_CONCURRENCY` | `8` | LV pages in flight |
 | `BANDO_ESCALATION_BUDGET` | `20` | max escalation calls per run |
 
@@ -104,28 +107,54 @@ app/
   seed.py            builds the demo Bando from the verified example
   eval.py            extraction accuracy + latency/cost benchmark (bando-eval)
   domain/            pydantic models + enums: the contract types
-  storage/           JSON store: index + one file per Bando
+  storage/           folder-per-tender store (bando.json, source.pdf, steps/,
+                     result.json) + an index; step artifacts written here
   pipeline/
     pricing_db.py    loads catalog / productivity / parameters
     pricing.py       the pricing engine + bid range (golden math)
     extractors/      PdfReader interface + pypdf + PyMuPDF implementations
     steps/           read, parse, classify, canonicalize, match, price, aggregate
     ai/              interchangeable AI engines: extract (Responses), match
-                     (Decisions), escalate — each falls back to deterministic
-    runner.py        sequences the steps, keeps per-step state
+                     (Decisions), classify (identity), escalate — each falls
+                     back to deterministic
+    runner.py        sequences the steps, keeps per-step state, dumps artifacts
   api/               health, catalog, bandi routers
 tests/               golden + API + AI-adapter + ground-truth tests
 ```
 
 ## The pipeline
 
-`Read → Parse → Classify → Canonicalize → Match → Price → Aggregate`.
+`Read → Classify pages → Parse → Overview → Classify → Canonicalize → Match →
+Price → Aggregate`.
 
 Each step is independently replaceable. The PDF reader is behind a small
-interface (`pipeline/extractors`); the AI extraction and matching engines sit
-behind `pipeline/ai` and fall back to the deterministic `Parse`/`Match` when
-OpenAI is not configured. Everything a step cannot understand becomes a **flag**
-on the Item, never a silent drop.
+interface (`pipeline/extractors`); the AI extraction, matching and identity
+engines sit behind `pipeline/ai` and fall back to the deterministic
+`Parse`/`Match`/`classify` when OpenAI is not configured. Everything a step
+cannot understand becomes a **flag** on the Item, never a silent drop.
+
+The **Classify** step names the tender: a quick Luna call over just the opening
+pages (`BANDO_TITLE_MAX_PAGES`) fills `title` and a one-line `description` on
+every upload, so the archive reads "ventilation system in this school" instead
+of the source filename. The whole-document overview stays a `--deep` pass.
+
+## Storage and run artifacts
+
+Each tender lives in its own folder under `runtime/bandi/<id>/`:
+
+```
+<id>/
+  bando.json     the live/final Bando the API serves
+  source.pdf     the uploaded tender
+  steps/         one JSON per pipeline step (01_read.json … 09_aggregate.json)
+  result.json    frozen final Bando snapshot, written when the run is DONE
+```
+
+Every step's output is dumped as it completes, so a run can be reconstructed and
+audited from what the pipeline actually produced (`01_read` page texts,
+`03_parse` items + detections, `05_classify` title/description/classification,
+`07_match`, `08_price`, `09_aggregate`). Old flat `<id>.json` / `<id>.pdf` files
+are still read, so existing installs need no migration.
 
 ## Swapping the PDF engine
 

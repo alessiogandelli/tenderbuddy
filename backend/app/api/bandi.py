@@ -146,6 +146,7 @@ def _run_in_background(bando_id: str, deep: bool = False) -> None:
                 reader=default_reader(),
                 on_step=on_step,
                 deep=deep,
+                artifacts=storage.ArtifactWriter(bando_id),
             )
         except Exception:  # noqa: BLE001 - failure is persisted in pipeline state
             pass
