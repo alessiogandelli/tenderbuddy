@@ -112,6 +112,7 @@ def _summarize(bando: Bando) -> BandoSummary:
             indicative_price_chf=bando.summary.indicative_selling_price_chf,
         ),
         overview_summary=bando.overview.summary if bando.overview else None,
+        identity=bando.identity,
         page_types=[PageTypeEntry(page=p.page, type=p.type) for p in bando.page_types],
     )
 

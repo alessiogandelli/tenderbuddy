@@ -271,6 +271,20 @@ export interface OfferFormValues {
   cover: { page: number | null; values: Record<string, string | null> } | null;
 }
 
+/** One string in the app's four languages; empty slots fall back to English. */
+export interface LocalizedText {
+  en: string;
+  de: string;
+  fr: string;
+  it: string;
+}
+
+/** The AI-named title and one-liner, in all four app languages. */
+export interface BandoIdentity {
+  title: LocalizedText;
+  description: LocalizedText;
+}
+
 export interface Bando {
   schema_version: string;
   id: string;
@@ -291,6 +305,8 @@ export interface Bando {
   summary: Summary;
   recommended_bid_range: BidRange | null;
   overview: Overview | null;
+  /** Additive: the AI-named title + one-liner in the four app languages. */
+  identity?: BandoIdentity | null;
   parameters: ProjectParameters | null;
   usage: Usage | null;
   offer_form?: OfferForm | null;
@@ -312,6 +328,8 @@ export interface BandoSummary {
   totals: BandoTotals;
   /** The AI overview's one-liner, for the archive listing. */
   overview_summary?: string | null;
+  /** The localized title + one-liner, so the archive is language-aware. */
+  identity?: BandoIdentity | null;
   /** The per-page types, so the archive can draw the page tape (compact). */
   page_types?: PageTypeEntry[];
 }

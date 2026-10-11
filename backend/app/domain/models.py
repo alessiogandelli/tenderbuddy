@@ -109,6 +109,26 @@ class Summary(BaseModel):
     margin_chf: float = 0.0
 
 
+class LocalizedText(BaseModel):
+    """One string in the app's four languages; the contract stays language-free."""
+
+    en: str = ""
+    de: str = ""
+    fr: str = ""
+    it: str = ""
+
+
+class BandoIdentity(BaseModel):
+    """The AI-named tender: a title and a one-liner, in all four languages.
+
+    ``Bando.title`` / ``Bando.description`` keep the English slot as the
+    canonical fallback; the UI picks the slot for the active locale.
+    """
+
+    title: LocalizedText = Field(default_factory=LocalizedText)
+    description: LocalizedText = Field(default_factory=LocalizedText)
+
+
 class Overview(BaseModel):
     """Document-level reading of the whole tender, by Luna or a fallback.
 
@@ -275,6 +295,8 @@ class Bando(BaseModel):
     recommended_bid_range: Optional[BidRange] = None
     # Additive: whole-document panorama from Luna (or the deterministic fallback).
     overview: Optional[Overview] = None
+    # Additive: the AI-named title + one-liner in the four app languages.
+    identity: Optional[BandoIdentity] = None
     # Additive: the pricing Parameters this Bando is priced with (a copy of
     # project_parameters.json, editable by the estimator).
     parameters: Optional[Dict[str, object]] = None
@@ -313,6 +335,9 @@ class BandoSummary(BaseModel):
     # Additive: the AI overview's one-liner, so the archive can show it without
     # loading the whole Bando. None when the run produced no overview.
     overview_summary: Optional[str] = None
+    # Additive: the localized title + one-liner, so the archive is language-aware
+    # without loading the whole Bando. None for runs before the identity pass.
+    identity: Optional[BandoIdentity] = None
     # Additive: the per-page types, so the archive can draw the page tape. Kept
     # compact (page + type only): the listing is polled while a run is live.
     page_types: List[PageTypeEntry] = Field(default_factory=list)

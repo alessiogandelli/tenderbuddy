@@ -1,7 +1,11 @@
 """Pipeline steps, re-exported for a compact runner import path."""
 from .aggregate import aggregate  # noqa: F401
 from .canonicalize import canonicalize_items  # noqa: F401
-from .classify import build_classification, classify_document  # noqa: F401
+from .classify import (  # noqa: F401
+    ClassificationResult,
+    build_classification,
+    classify_document,
+)
 from .classify_pages import (  # noqa: F401
     classify_page_deterministic,
     classify_pages_deterministic,
@@ -19,6 +23,7 @@ __all__ = [
     "aggregate",
     "build_classification",
     "build_overview",
+    "ClassificationResult",
     "canonicalize_items",
     "candidate_products",
     "classify_document",

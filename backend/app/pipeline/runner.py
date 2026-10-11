@@ -293,17 +293,20 @@ def run_pipeline(
             PipelineStatus.RUNNING,
             message="%d positions extracted" % len(items),
         )
-        title, description, classification = steps_pkg.build_classification(
+        identity = steps_pkg.build_classification(
             document, bando.source_file or "", use_ai=use_ai, usage=usage
         )
-        # Only fill in when the user has not set them.
-        bando.title = bando.title or title
-        bando.description = bando.description or description
-        bando.classification = classification
+        # Only fill in when the user has not set them (the English slot is the
+        # canonical fallback; the UI picks the slot for the active locale).
+        bando.title = bando.title or identity.title
+        bando.description = bando.description or identity.description
+        bando.classification = identity.classification
+        bando.identity = identity.identity
         _artifact(artifacts, PipelineStep.CLASSIFY, {
             "title": bando.title,
             "description": bando.description,
             "classification": bando.classification,
+            "identity": bando.identity,
         })
 
         emit(PipelineStep.CANONICALIZE, PipelineStatus.RUNNING, message="Normalising")

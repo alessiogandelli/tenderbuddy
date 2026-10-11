@@ -8,9 +8,11 @@ English and is translated at presentation time.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from ...domain.enums import Classification
+from ...domain.models import BandoIdentity, LocalizedText
 from ..extractors import Document
 from ..ai.usage import UsageLedger
 
@@ -89,18 +91,38 @@ def classify_document(
     return None, description, classification
 
 
+@dataclass
+class ClassificationResult:
+    """The Bando's identity: a canonical fallback plus the four-language version."""
+
+    title: Optional[str]
+    description: Optional[str]
+    classification: Classification
+    identity: Optional[BandoIdentity] = None
+
+
+def _localized(mapping: dict) -> LocalizedText:
+    return LocalizedText(
+        en=mapping.get("en", ""),
+        de=mapping.get("de", ""),
+        fr=mapping.get("fr", ""),
+        it=mapping.get("it", ""),
+    )
+
+
 def build_classification(
     document: Document,
     source_file: str,
     *,
     use_ai: bool,
     usage: Optional[UsageLedger] = None,
-) -> Tuple[Optional[str], Optional[str], Classification]:
+) -> ClassificationResult:
     """Classify the Bando, naming it with a quick AI read of the opening pages.
 
     The classification itself stays deterministic (a canonical English enum);
-    only the title and the one-line description come from Luna, and any failure
-    falls back to the heuristic classifier so a run never breaks on the model.
+    only the title and the one-line description come from Luna, in the four app
+    languages (the English slot is the canonical fallback). Any failure falls
+    back to the heuristic classifier so a run never breaks on the model.
     """
     _, description, classification = classify_document(document, source_file)
 
@@ -109,11 +131,21 @@ def build_classification(
             from ..ai.classify import document_identity
 
             data = document_identity(document, usage=usage)
-            title = data.get("title") or None
-            ai_description = data.get("description") or None
-            if title or ai_description:
-                return title, ai_description or description, classification
+            title_i18n = _localized(data.get("title") or {})
+            description_i18n = _localized(data.get("description") or {})
+            if title_i18n.en or description_i18n.en:
+                identity = BandoIdentity(
+                    title=title_i18n, description=description_i18n
+                )
+                return ClassificationResult(
+                    title=title_i18n.en or None,
+                    description=description_i18n.en or description,
+                    classification=classification,
+                    identity=identity,
+                )
         except Exception:  # noqa: BLE001 - identity must never fail the run
             pass
 
-    return None, description, classification
+    return ClassificationResult(
+        title=None, description=description, classification=classification
+    )

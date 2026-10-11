@@ -1,4 +1,4 @@
-"""Identity pass: the AI names the tender, with a deterministic fallback.
+"""Identity pass: the AI names the tender in four languages, with a fallback.
 
 Uses fake clients (no network, no key), mirroring test_ai_adapters.py.
 """
@@ -22,6 +22,21 @@ OPENING = "\n".join(
     ]
 )
 
+PAYLOAD = {
+    "title": {
+        "en": "Ventilation school Zurich",
+        "de": "Lueftung Schule Zuerich",
+        "fr": "Ventilation ecole Zurich",
+        "it": "Ventilazione scuola Zurigo",
+    },
+    "description": {
+        "en": "Ventilation system of a primary school.",
+        "de": "Lueftungsanlage einer Primarschule.",
+        "fr": "Systeme de ventilation d'une ecole primaire.",
+        "it": "Impianto di ventilazione di una scuola elementare.",
+    },
+}
+
 
 class _FakeUsage:
     def __init__(self, input_tokens: int, output_tokens: int):
@@ -32,7 +47,7 @@ class _FakeUsage:
 class _FakeResponse:
     def __init__(self, output_text):
         self.output_text = output_text
-        self.usage = _FakeUsage(120, 30)
+        self.usage = _FakeUsage(120, 60)
 
 
 class _FakeResponses:
@@ -57,28 +72,26 @@ def _doc() -> Document:
     return Document(page_count=1, pages=[Page(number=1, text=OPENING)])
 
 
-def test_document_identity_returns_title_and_description():
-    client = _FakeAsyncClient(
-        {"title": "Ventilazione scuola Zurigo", "description": "Impianto di ventilazione di una scuola."}
-    )
+def test_document_identity_returns_all_four_languages():
+    client = _FakeAsyncClient(PAYLOAD)
     usage = UsageLedger()
     data = document_identity(_doc(), client=client, usage=usage)
 
-    assert data["title"] == "Ventilazione scuola Zurigo"
-    assert data["description"] == "Impianto di ventilazione di una scuola."
+    assert set(data) == {"title", "description"}
+    for key in ("title", "description"):
+        assert set(data[key]) == {"en", "de", "fr", "it"}
+    assert data["title"]["it"] == "Ventilazione scuola Zurigo"
+    assert data["title"]["en"] == "Ventilation school Zurich"
     assert usage.calls == 1
     assert usage.cost_usd > 0
-    # Only the opening pages are sent, never the whole document.
     assert "Comune di Zurigo" in client.responses.calls[0]["input"]
 
 
 def test_build_classification_without_ai_stays_deterministic():
-    title, description, classification = build_classification(
-        _doc(), "26122_ca_capitolato.pdf", use_ai=False
-    )
-    assert title is None
-    assert classification is Classification.VENTILATION
-    assert description is None
+    result = build_classification(_doc(), "26122_ca_capitolato.pdf", use_ai=False)
+    assert result.title is None
+    assert result.classification is Classification.VENTILATION
+    assert result.identity is None
 
 
 def test_build_classification_uses_ai_identity(monkeypatch):
@@ -86,16 +99,18 @@ def test_build_classification_uses_ai_identity(monkeypatch):
         classify_ai,
         "document_identity",
         lambda document, usage=None: {
-            "title": "Ventilazione scuola",
-            "description": "Fornitura e posa dell'impianto di ventilazione.",
+            "title": PAYLOAD["title"],
+            "description": PAYLOAD["description"],
         },
     )
-    title, description, classification = build_classification(
-        _doc(), "26122_ca_capitolato.pdf", use_ai=True
-    )
-    assert title == "Ventilazione scuola"
-    assert description == "Fornitura e posa dell'impianto di ventilazione."
-    assert classification is Classification.VENTILATION
+    result = build_classification(_doc(), "26122_ca_capitolato.pdf", use_ai=True)
+
+    assert result.title == "Ventilation school Zurich"
+    assert result.description == "Ventilation system of a primary school."
+    assert result.classification is Classification.VENTILATION
+    assert result.identity is not None
+    assert result.identity.title.it == "Ventilazione scuola Zurigo"
+    assert result.identity.description.de == "Lueftungsanlage einer Primarschule."
 
 
 def test_build_classification_falls_back_when_ai_fails(monkeypatch):
@@ -103,8 +118,7 @@ def test_build_classification_falls_back_when_ai_fails(monkeypatch):
         raise RuntimeError("no key")
 
     monkeypatch.setattr(classify_ai, "document_identity", boom)
-    title, description, classification = build_classification(
-        _doc(), "26122_ca_capitolato.pdf", use_ai=True
-    )
-    assert title is None
-    assert classification is Classification.VENTILATION
+    result = build_classification(_doc(), "26122_ca_capitolato.pdf", use_ai=True)
+    assert result.title is None
+    assert result.identity is None
+    assert result.classification is Classification.VENTILATION

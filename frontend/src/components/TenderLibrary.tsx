@@ -4,6 +4,7 @@ import { FileWarning, Loader2 } from "lucide-react";
 import { api } from "../api/client";
 import type { BandoSummary, PageTypeEntry, PipelineStatus } from "../api/types";
 import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
+import { pickLocalized } from "../lib/localized";
 import { useI18n } from "../i18n";
 
 const POLL_MS = 3000;
@@ -74,18 +75,26 @@ function statusClass(status: PipelineStatus): string {
 }
 
 function LibraryCard({ bando }: { bando: BandoSummary }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { read, total } = progressOf(bando);
   const pct = total > 0 ? Math.round((read / total) * 100) : 0;
-  const oneLiner = bando.overview_summary || bando.description || "";
+  const title =
+    pickLocalized(bando.identity?.title, locale) ||
+    bando.title ||
+    t("common.untitledTender");
+  const oneLiner =
+    pickLocalized(bando.identity?.description, locale) ||
+    bando.overview_summary ||
+    bando.description ||
+    "";
 
   return (
     <li className={`library__item ${statusClass(bando.pipeline.status)}`}>
       <Link to={`/bandi/${bando.id}`} className="library__row">
         <div className="library__info">
           <div className="library__cardhead">
-            <h3 className="library__name" title={bando.title ?? undefined}>
-              {bando.title || t("common.untitledTender")}
+            <h3 className="library__name" title={title}>
+              {title}
             </h3>
             {isRunning(bando) && (
               <Loader2 size={14} className="spin library__spin" aria-hidden />
