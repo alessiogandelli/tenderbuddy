@@ -92,17 +92,18 @@ single port.
   parameters API. The hero shows the offer (reference price in its tooltip),
   margin set vs effective after rounding, chance to win, expected contribution
   and how many items are priced / to check; a segmented control picks the
-  strategy. One hand-drawn SVG waterfall goes from material and labour (solid =
-  verified, hatched = to check) through direct cost, overhead, transport and
-  cost baseline to margin and offer; unpriced positions are a dashed "?"
-  column, never added. Every column is focusable, explains its calculation base
+  strategy. The chart shows the offer as one horizontal ribbon (or a pie,
+  remembered per browser): material, labour, project costs, overhead, transport
+  and margin, left to right, each in its colour. Material and labour are one
+  class each under a bracket, the share still to check a lighter shade of the
+  class colour; brackets underneath close direct cost, cost baseline and offer.
+  Positions without a price stand apart as a dashed "+n ?" box, never added.
+  The pie has the classes inside and, outside, material and labour split into
+  verified / to check. Every piece is focusable, explains its calculation base
   in a tooltip and has a hidden data-table fallback; material, labour and the
-  unpriced column open the Items tab filtered (`?status=…&component=…`).
-  The chart switches between bars and a pie (remembered per browser): the pie
-  is a two-ring donut — inside priced positions, project costs, surcharges and
-  margin; outside their parts — where verified and to-check prices are the two
-  halves of the priced positions, as the grouped legend shows. Bars grow in on
-  entry, arcs sweep in and slide when the strategy changes.
+  unpriced box open the Items tab filtered (`?status=…&component=…`). The
+  ribbon fills in left to right on entry, arcs sweep in, and both slide when
+  the strategy changes.
 
 ## Brand
 
@@ -135,7 +136,7 @@ src/
   components/   Layout, TenderHeader, ProcessingStage (page tape), TapeMorph
                 (tape → rail hand-over), SplitLayout, PageRail, PdfViewer,
                 ItemList, ItemCard (pricing chain + hand fixes), AnimatedChf,
-                Waterfall + CostMix (price charts), Donut
+                PriceRibbon + CostMix (price charts), Donut
   pages/        UploadPage, TenderPage (phases + tabs), ReviewPage,
                 ParametersPage, PricePage
   i18n/         locale bundles (en, de-CH, fr-CH, it-CH) + provider/hook

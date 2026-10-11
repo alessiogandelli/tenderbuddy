@@ -178,7 +178,7 @@ export function TenderPage() {
       <div className="tender__body">
         <Outlet context={context} />
       </div>
-      <StepBar bando={bando} scenario={scenario} setScenario={setScenario} />
+      <StepBar bando={bando} scenario={scenario} />
       {phase === "morph" && morph && (
         <TapeMorph start={morph} onEnd={() => setPhase("ready")} />
       )}

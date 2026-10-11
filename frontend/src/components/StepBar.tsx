@@ -26,11 +26,9 @@ function stepIndex(pathname: string): number {
 export function StepBar({
   bando,
   scenario,
-  setScenario,
 }: {
   bando: Bando;
   scenario: string;
-  setScenario: (scenario: string) => void;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -106,7 +104,6 @@ export function StepBar({
         bando={bando}
         open={exporting}
         scenario={scenario}
-        onScenario={setScenario}
         onClose={() => setExporting(false)}
       />
     </nav>

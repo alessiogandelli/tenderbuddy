@@ -22,7 +22,6 @@ import { api } from "../api/client";
 import type { Bando } from "../api/types";
 import { AnimatedChf } from "../components/AnimatedChf";
 import { Donut } from "../components/Donut";
-import { COLUMN_COLORS } from "../components/Waterfall";
 import { formatChf, formatCompact, formatNumber } from "../lib/format";
 import {
   GROUPS,
@@ -38,7 +37,7 @@ import {
   type ParamField,
 } from "../lib/parameters";
 import { offerOf } from "../lib/scenario";
-import { priceParts, type PartKey } from "../lib/waterfall";
+import { COLUMN_COLORS, priceParts, type PartKey } from "../lib/waterfall";
 import { useI18n } from "../i18n";
 import { useTender } from "./tenderContext";
 

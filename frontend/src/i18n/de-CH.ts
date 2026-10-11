@@ -160,6 +160,7 @@ export const deCH: Messages = {
     title: "Angebot exportieren",
     intro: "Das Ausschreibungs-PDF wie erhalten, mit unserem Preis in der Preiszelle jeder Position.",
     scenario: "Angebotsszenario",
+    scenarioHint: "Gewählt auf der Seite Preis & Angebot.",
     whatGoesIn: "Was ins PDF kommt",
     priced: "Kalkuliert",
     manual: "Von Hand kalkuliert",
@@ -499,7 +500,7 @@ export const deCH: Messages = {
     strategy: "Strategie",
     bidNote: "Zuschlagschancen sind Schätzungen des Angebotsmodells, keine Zusage.",
     chartTitle: "Von den Kosten zum Angebot",
-    chartIntro: "Material und Arbeit sind die bepreisten Positionen: voll ist geprüft, schraffiert noch zu prüfen. Klicken Sie darauf oder auf die Spalte ohne Preis, um diese Positionen zu öffnen.",
+    chartIntro: "Das Angebot von links nach rechts, eine Farbe pro Teil. Material und Arbeit sind je eine Klasse: der hellere Ton ist der noch zu prüfende Anteil. Klicken Sie darauf oder auf das «?»-Feld, um diese Positionen zu öffnen.",
     chartAria: "Wasserfall von den Kosten zum Angebot",
     view: {
       label: "Diagrammtyp",
@@ -507,16 +508,12 @@ export const deCH: Messages = {
       pie: "Kreis",
     },
     mix: {
-      intro: "Innen: woraus das Angebot besteht. Aussen: seine Teile. Geprüfte und zu prüfende Preise bilden zusammen die bepreisten Positionen; klicken Sie darauf, um sie zu öffnen.",
+      intro: "Innen: woraus das Angebot besteht. Aussen: Material und Arbeit, je aufgeteilt in geprüft und, heller, noch zu prüfen. Klicken Sie darauf, um diese Positionen zu öffnen.",
       aria: "Woraus das Angebot besteht",
-      priced: "Bepreiste Positionen",
       unpriced: "Ohne Preis",
-      surcharges: "Zuschläge",
       noEstimate: "keine Schätzung",
       unpricedNote: "nicht im Angebot",
-      pricedBase: "Material + Arbeit der Positionen mit Preis. Geprüfte und zu prüfende Preise zählen beide im Angebot.",
       hint: "Fahren Sie über einen Ring oder eine Zeile, um zu sehen, woraus er besteht.",
-      split: "Material {material} · Arbeit {labour}",
     },
     scenario: {
       Aggressive: "Aggressiv",
@@ -567,7 +564,6 @@ export const deCH: Messages = {
     legend: {
       verified: "Geprüft",
       check: "Zu prüfen",
-      unpriced: "Ohne Preis (keine Schätzung)",
     },
     tableCaption: "Von den Kosten zum Angebot",
     tableComponent: "Bestandteil",

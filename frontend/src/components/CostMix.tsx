@@ -1,29 +1,36 @@
 import { useState, type CSSProperties } from "react";
-import type { Column, ColumnKey } from "../lib/waterfall";
+import {
+  CHECK_COLORS,
+  COLUMN_COLORS,
+  type Column,
+  type ColumnKey,
+  type ItemsFilter,
+} from "../lib/waterfall";
 import { formatChf, formatNumber } from "../lib/format";
 import { useI18n } from "../i18n";
 import { AnimatedChf } from "./AnimatedChf";
 import { Donut, type DonutSegment } from "./Donut";
-import { COLUMN_COLORS, type ItemsFilter } from "./Waterfall";
 
-/** Parent arcs (inner ring) are a lighter tint of their parts (outer ring). */
-const PARENT_COLORS = { priced: "#b3dcc6", project: "#f3cd94", surcharges: "#d3dedb", margin: "#a6c7dd" };
+type Split = "material" | "labour";
+const SPLITS: Split[] = ["material", "labour"];
 
-type Key = "priced" | "verified" | "check" | "unpriced" | "surcharges" | ColumnKey;
-
-const FILTERS: Partial<Record<Key, ItemsFilter>> = {
-  verified: { status: "priced", component: null },
-  check: { status: "check", component: null },
+const FILTERS: Record<string, ItemsFilter> = {
+  material: { status: null, component: "material" },
+  "material-verified": { status: "priced", component: "material" },
+  "material-check": { status: "check", component: "material" },
+  labour: { status: null, component: "labour" },
+  "labour-verified": { status: "priced", component: "labour" },
+  "labour-check": { status: "check", component: "labour" },
   unpriced: { status: "open", component: null },
 };
 
 /**
- * The offer as a ring: inside, what it is made of (priced positions, project
- * costs, surcharges, margin); outside, the parts of each. Verified and to-check
- * prices are the two halves of the priced positions' arc, the way the legend
- * groups them. Positions without a price have no amount, so they are listed,
- * never drawn. Hovering an arc or a row marks both; the priced rows open the
- * item list filtered.
+ * The offer as a ring. Inside, one arc per class: material, labour, project
+ * costs, overhead, transport, margin. Outside, only material and labour are
+ * split, into verified (the class colour) and still to check (a lighter shade
+ * of it), so both halves sit on their class. Positions without a price have no
+ * amount: they are listed, never drawn. Hovering an arc or a row marks both;
+ * material and labour rows open the item list filtered.
  */
 export function CostMix({
   columns,
@@ -43,119 +50,70 @@ export function CostMix({
   const { t } = useI18n();
   const [active, setActive] = useState<string | null>(null);
   const column = (key: ColumnKey) => columns.find((entry) => entry.key === key);
-  const amount = (key: ColumnKey) => column(key)?.amount ?? 0;
-  const segment = (key: ColumnKey, status: "verified" | "check") =>
-    column(key)?.segments?.find((entry) => entry.status === status)?.amount ?? 0;
-
-  const verified = { material: segment("material", "verified"), labour: segment("labour", "verified") };
-  const check = { material: segment("material", "check"), labour: segment("labour", "check") };
-  const verifiedTotal = verified.material + verified.labour;
-  const checkTotal = check.material + check.labour;
-  const priced = verifiedTotal + checkTotal;
-  const project = column("project") ? amount("project") : 0;
-  const overhead = amount("overhead");
-  const transport = amount("transport");
-  const surcharges = overhead + transport;
-  const margin = amount("margin");
+  const amount = (key: ColumnKey) => Math.max(column(key)?.amount ?? 0, 0);
+  const segment = (key: Split, status: "verified" | "check") =>
+    column(key)?.segments?.find((entry) => entry.status === status);
   const share = (value: number) => (offer > 0 ? `${formatNumber((value / offer) * 100, 1)}%` : "—");
 
-  const names: Record<string, string> = {
-    priced: t("price.mix.priced"),
-    verified: t("price.legend.verified"),
-    check: t("price.legend.check"),
-    unpriced: t("price.mix.unpriced"),
-    project: t("price.col.project"),
-    surcharges: t("price.mix.surcharges"),
-    overhead: t("price.col.overhead"),
-    transport: t("price.col.transport"),
-    margin: t("price.col.margin"),
-  };
-  const values: Record<string, number> = {
-    priced,
-    verified: verifiedTotal,
-    check: checkTotal,
-    project,
-    surcharges,
-    overhead,
-    transport,
-    margin,
-  };
-  const arc = (key: string, value: number, color: string, extra: Partial<DonutSegment> = {}): DonutSegment => ({
+  const classes = (["material", "labour", "project", "overhead", "transport", "margin"] as ColumnKey[]).filter(
+    (key) => column(key) && amount(key) > 0,
+  );
+  const names: Record<string, string> = {};
+  const values: Record<string, number> = {};
+  for (const key of classes) {
+    names[key] = t(`price.col.${key}`);
+    values[key] = amount(key);
+  }
+  for (const key of SPLITS) {
+    for (const status of ["verified", "check"] as const) {
+      names[`${key}-${status}`] = `${t(`price.col.${key}`)} · ${t(`price.segment.${status}`)}`;
+      values[`${key}-${status}`] = Math.max(segment(key, status)?.amount ?? 0, 0);
+    }
+  }
+  names.unpriced = t("price.mix.unpriced");
+
+  const arc = (key: string, color: string, extra: Partial<DonutSegment> = {}): DonutSegment => ({
     key,
-    value,
+    value: values[key] ?? 0,
     color,
-    label: `${names[key]}: ${formatChf(value)}, ${share(value)}`,
-    link: Boolean(FILTERS[key as Key]),
+    label: `${names[key]}: ${formatChf(values[key] ?? 0)}, ${share(values[key] ?? 0)}`,
+    link: key in FILTERS,
     ...extra,
   });
+  const inner = classes.map((key) => arc(key, COLUMN_COLORS[key]));
+  const outer = classes.flatMap((key) =>
+    key === "material" || key === "labour"
+      ? [arc(`${key}-verified`, COLUMN_COLORS[key]), arc(`${key}-check`, CHECK_COLORS[key])]
+      : [arc(key, COLUMN_COLORS[key], { key: `${key}-outer`, hidden: true })],
+  );
 
-  const inner: DonutSegment[] = [
-    arc("priced", priced, PARENT_COLORS.priced),
-    arc("project", project, PARENT_COLORS.project),
-    arc("surcharges", surcharges, PARENT_COLORS.surcharges),
-    arc("margin-parent", margin, PARENT_COLORS.margin, { label: `${names.margin}: ${formatChf(margin)}` }),
-  ];
-  const outer: DonutSegment[] = [
-    arc("verified", verifiedTotal, COLUMN_COLORS.material),
-    arc("check", checkTotal, COLUMN_COLORS.material, { hatched: true }),
-    arc("project", project, COLUMN_COLORS.project),
-    arc("overhead", overhead, COLUMN_COLORS.overhead),
-    arc("transport", transport, COLUMN_COLORS.transport),
-    arc("margin", margin, COLUMN_COLORS.margin),
-  ];
-  // A parent lights up with its parts, and the parts with their parent.
-  const family: Record<string, string[]> = {
-    priced: ["priced", "verified", "check"],
-    verified: ["verified", "priced"],
-    check: ["check", "priced"],
-    surcharges: ["surcharges", "overhead", "transport"],
-    overhead: ["overhead", "surcharges"],
-    transport: ["transport", "surcharges"],
-    margin: ["margin", "margin-parent"],
-    "margin-parent": ["margin", "margin-parent"],
-    project: ["project"],
-  };
-  const lit = active ? family[active] ?? [active] : [];
-  const focus = active === "margin-parent" ? "margin" : active;
+  // A class lights up with its halves, and a half with its class.
+  const classOf = (key: string) => key.split("-")[0];
+  const lit = !active
+    ? []
+    : active.includes("-")
+      ? [active, classOf(active)]
+      : SPLITS.includes(active as Split)
+        ? [active, `${active}-verified`, `${active}-check`]
+        : [active];
   const open = (key: string) => {
-    const filter = FILTERS[key as Key];
-    if (filter) onOpenItems(filter);
+    if (FILTERS[key]) onOpenItems(FILTERS[key]);
   };
-  const baseOf = (key: string | null): string | null => {
-    switch (key) {
-      case "verified":
-      case "check":
-      case "priced":
-        return t("price.mix.pricedBase");
-      case "surcharges":
-        return `${describe("overhead")} ${describe("transport")}`;
-      case "unpriced":
-        return describe("unpriced");
-      case "project":
-      case "overhead":
-      case "transport":
-      case "margin":
-        return describe(key);
-      default:
-        return null;
-    }
-  };
+  const base = active ? describe(classOf(active) as ColumnKey) : null;
 
-  const row = (
-    key: string,
-    swatch: CSSProperties | string,
-    count: number | null,
-    value: number | null,
-    extra = "",
-    note?: string,
-  ) => {
-    const filter = FILTERS[key as Key];
+  const row = (key: string, swatch: CSSProperties | string, count: number | null, extra = "", note?: string) => {
+    const filter = FILTERS[key];
     const isLit = lit.includes(key);
+    const value = key in values ? values[key] : null;
     const content = (
       <>
-        <span className={`mix__key ${typeof swatch === "string" ? swatch : ""}`} style={typeof swatch === "string" ? undefined : swatch} aria-hidden />
+        <span
+          className={`mix__key ${typeof swatch === "string" ? swatch : ""}`}
+          style={typeof swatch === "string" ? undefined : swatch}
+          aria-hidden
+        />
         <span className="mix__name">
-          {names[key]}
+          {key.includes("-") ? t(`price.legend.${key.split("-")[1]}`) : names[key]}
           {note && <span className="mix__note">{note}</span>}
         </span>
         <span className="mix__count">{count != null ? t("price.items", { count }) : ""}</span>
@@ -183,10 +141,7 @@ export function CostMix({
     );
   };
 
-  const centreValue = focus && focus in values ? values[focus] : null;
-  const base = baseOf(focus);
-  const split = (parts: { material: number; labour: number }) =>
-    t("price.mix.split", { material: formatChf(parts.material), labour: formatChf(parts.labour) });
+  const focusValue = active && active in values ? values[active] : null;
 
   return (
     <div className="mix">
@@ -200,15 +155,15 @@ export function CostMix({
           ]}
           active={null}
           marked={lit}
-          onActive={setActive}
+          onActive={(key) => setActive(key && key.endsWith("-outer") ? key.slice(0, -6) : key)}
           onSelect={open}
           label={t("price.mix.aria")}
         >
-          {focus && centreValue != null ? (
+          {active && focusValue != null ? (
             <>
-              <span className="donut__sub">{names[focus]}</span>
-              <span className="donut__pct">{share(centreValue)}</span>
-              <span className="donut__amount">{formatChf(centreValue)}</span>
+              <span className="donut__sub">{names[active]}</span>
+              <span className="donut__pct">{share(focusValue)}</span>
+              <span className="donut__amount">{formatChf(focusValue)}</span>
             </>
           ) : (
             <>
@@ -225,20 +180,24 @@ export function CostMix({
       </div>
 
       <div className="mix__legend">
-        <div className={`mix__group ${lit.includes("priced") ? "is-lit" : ""}`}>
-          <ul>
-            {row("priced", { background: PARENT_COLORS.priced }, counts.verified + counts.check, priced, "mix__row--head")}
-            {row("verified", "mix__key--solid", counts.verified, verifiedTotal, "mix__row--sub", split(verified))}
-            {row("check", "mix__key--hatch", counts.check, checkTotal, "mix__row--sub", split(check))}
-          </ul>
-        </div>
+        {SPLITS.filter((key) => classes.includes(key)).map((key) => (
+          <div
+            key={key}
+            className={`mix__group ${lit.includes(key) ? "is-lit" : ""}`}
+            style={{ "--c": COLUMN_COLORS[key] } as CSSProperties}
+          >
+            <ul>
+              {row(key, { background: COLUMN_COLORS[key] }, column(key)?.count ?? null, "mix__row--head")}
+              {row(`${key}-verified`, { background: COLUMN_COLORS[key] }, segment(key, "verified")?.count ?? 0, "mix__row--sub")}
+              {row(`${key}-check`, { background: CHECK_COLORS[key] }, segment(key, "check")?.count ?? 0, "mix__row--sub")}
+            </ul>
+          </div>
+        ))}
         <ul className="mix__rest">
-          {counts.open > 0 && row("unpriced", "mix__key--ghost", counts.open, null, "mix__row--ghost", t("price.mix.unpricedNote"))}
-          {project > 0 && row("project", { background: COLUMN_COLORS.project }, null, project)}
-          {row("surcharges", { background: PARENT_COLORS.surcharges }, null, surcharges, "mix__row--head")}
-          {row("overhead", { background: COLUMN_COLORS.overhead }, null, overhead, "mix__row--sub")}
-          {row("transport", { background: COLUMN_COLORS.transport }, null, transport, "mix__row--sub")}
-          {row("margin", { background: COLUMN_COLORS.margin }, null, margin, "mix__row--head")}
+          {counts.open > 0 && row("unpriced", "mix__key--ghost", counts.open, "mix__row--ghost", t("price.mix.unpricedNote"))}
+          {classes
+            .filter((key) => !SPLITS.includes(key as Split))
+            .map((key) => row(key, { background: COLUMN_COLORS[key] }, null, "mix__row--head"))}
         </ul>
         <p className="mix__total">
           <span>{t("price.col.offer")}</span>
