@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, Minus, Plus, RotateCcw } from "lucide-react";
+import { ChevronDown, Minus, Plus, RotateCcw } from "lucide-react";
 import { api } from "../api/client";
 import { AnimatedChf } from "../components/AnimatedChf";
 import { formatChf, formatNumber } from "../lib/format";
@@ -262,26 +261,21 @@ export function ParametersPage() {
               </section>
             );
           })}
+          <div className="params__preview">
+            <span className="params__preview-label">{t("params.finalPrice")}</span>
+            <strong className="nextbar__price">
+              <AnimatedChf value={price} />
+            </strong>
+            {Math.round(delta) !== 0 && (
+              <span className={`nextbar__delta ${delta > 0 ? "is-up" : "is-down"}`}>
+                {delta > 0 ? "+" : "−"}
+                {formatChf(Math.abs(delta))} {t("params.sinceOpen")}
+              </span>
+            )}
+            {busy > 0 && <span className="muted">{t("params.updating")}</span>}
+          </div>
         </div>
       </div>
-      <footer className="nextbar">
-        <span className="nextbar__text">
-          <span className="muted">{t("params.finalPrice")}</span>
-          <strong className="nextbar__price">
-            <AnimatedChf value={price} />
-          </strong>
-          {Math.round(delta) !== 0 && (
-            <span className={`nextbar__delta ${delta > 0 ? "is-up" : "is-down"}`}>
-              {delta > 0 ? "+" : "−"}
-              {formatChf(Math.abs(delta))} {t("params.sinceOpen")}
-            </span>
-          )}
-          {busy > 0 && <span className="muted">{t("params.updating")}</span>}
-        </span>
-        <Link className="btn btn--primary" to={`/bandi/${bando.id}/price`}>
-          {t("params.continue")} <ArrowRight size={16} aria-hidden />
-        </Link>
-      </footer>
     </div>
   );
 }

@@ -1,10 +1,15 @@
+import type { CSSProperties } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { FilePlus2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { LANGUAGES, useI18n } from "../i18n";
 
 export function Layout() {
   const { locale, setLocale, t } = useI18n();
   const onUpload = useLocation().pathname === "/";
+  const active = Math.max(
+    0,
+    LANGUAGES.findIndex((language) => language.locale === locale),
+  );
 
   return (
     <div className="app">
@@ -16,7 +21,13 @@ export function Layout() {
           <span className="topbar__name">TenderBuddy</span>
         </Link>
         <div className="topbar__right">
-          <div className="lang" role="radiogroup" aria-label={t("language.label")}>
+          <div
+            className="lang"
+            role="radiogroup"
+            aria-label={t("language.label")}
+            style={{ "--i": active } as CSSProperties}
+          >
+            <span className="lang__pill" aria-hidden />
             {LANGUAGES.map((language) => (
               <button
                 key={language.locale}
@@ -33,7 +44,7 @@ export function Layout() {
           </div>
           {!onUpload && (
             <Link to="/" className="topbar__new">
-              <FilePlus2 size={16} aria-hidden /> {t("nav.newTender")}
+              <Plus size={17} aria-hidden /> {t("nav.newTender")}
             </Link>
           )}
         </div>

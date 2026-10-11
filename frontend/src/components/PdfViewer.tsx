@@ -529,7 +529,42 @@ export const PdfViewer = forwardRef<
 
   return (
     <section className="pdf">
-      <header className="pdf__bar">
+      {error && <p className="banner banner--error pdf__error">{error}</p>}
+      <div className="pdf__scroll" ref={setScroller}>
+        {doc && baseSize ? (
+          <div className="pdf__pages" style={{ gap: PAGE_GAP, "--s": scale } as CSSProperties}>
+            {Array.from({ length: doc.numPages }, (_, index) => index + 1).map((pageNumber) => (
+              <PdfPage
+                key={pageNumber}
+                doc={doc}
+                pageNumber={pageNumber}
+                baseSize={baseSize}
+                renderScale={renderScale}
+                type={pageTypes.get(pageNumber)}
+                items={byPage.get(pageNumber) ?? []}
+                results={results}
+                states={states}
+                selectedId={selectedId}
+                showBoxes={showBoxes}
+                root={scroller}
+                scenario={scenario}
+                scenarioLabel={scenarioLabel}
+                editingId={editingId}
+                onSelect={onSelect}
+                onEdit={setEditingId}
+                onSavePrice={onSavePrice}
+                formFields={fieldsByPage.get(pageNumber) ?? noFields}
+                formValues={formValues}
+                onSaveFormField={onSaveFormField}
+                register={register}
+              />
+            ))}
+          </div>
+        ) : (
+          !error && <p className="pdf__loading">{t("pdf.loading")}</p>
+        )}
+      </div>
+      <footer className="pdf__bar">
         <div className="pdf__nav">
           {leading}
           <button
@@ -614,42 +649,7 @@ export const PdfViewer = forwardRef<
             <MoveHorizontal size={15} aria-hidden /> {t("pdf.fit")}
           </button>
         </div>
-      </header>
-      {error && <p className="banner banner--error pdf__error">{error}</p>}
-      <div className="pdf__scroll" ref={setScroller}>
-        {doc && baseSize ? (
-          <div className="pdf__pages" style={{ gap: PAGE_GAP, "--s": scale } as CSSProperties}>
-            {Array.from({ length: doc.numPages }, (_, index) => index + 1).map((pageNumber) => (
-              <PdfPage
-                key={pageNumber}
-                doc={doc}
-                pageNumber={pageNumber}
-                baseSize={baseSize}
-                renderScale={renderScale}
-                type={pageTypes.get(pageNumber)}
-                items={byPage.get(pageNumber) ?? []}
-                results={results}
-                states={states}
-                selectedId={selectedId}
-                showBoxes={showBoxes}
-                root={scroller}
-                scenario={scenario}
-                scenarioLabel={scenarioLabel}
-                editingId={editingId}
-                onSelect={onSelect}
-                onEdit={setEditingId}
-                onSavePrice={onSavePrice}
-                formFields={fieldsByPage.get(pageNumber) ?? noFields}
-                formValues={formValues}
-                onSaveFormField={onSaveFormField}
-                register={register}
-              />
-            ))}
-          </div>
-        ) : (
-          !error && <p className="pdf__loading">{t("pdf.loading")}</p>
-        )}
-      </div>
+      </footer>
     </section>
   );
 });

@@ -3,8 +3,8 @@ import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { Bando, Product, ProductivityRule } from "../api/types";
 import { ProcessingStage } from "../components/ProcessingStage";
+import { StepBar } from "../components/StepBar";
 import { TapeMorph, type MorphStart } from "../components/TapeMorph";
-import { TenderHeader } from "../components/TenderHeader";
 import { PIPELINE_ORDER } from "../lib/flags";
 import { useI18n } from "../i18n";
 import { readScenario, saveScenario } from "../lib/scenario";
@@ -173,10 +173,10 @@ export function TenderPage() {
 
   return (
     <div className={`tender ${phase === "morph" ? "is-arriving" : ""}`}>
-      <TenderHeader bando={bando} defaults={defaults} scenario={scenario} setScenario={setScenario} />
       <div className="tender__body">
         <Outlet context={context} />
       </div>
+      <StepBar bando={bando} scenario={scenario} setScenario={setScenario} />
       {phase === "morph" && morph && (
         <TapeMorph start={morph} onEnd={() => setPhase("ready")} />
       )}
