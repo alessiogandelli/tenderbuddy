@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileSearch, ListChecks, Loader2, Scale, Upload } from "lucide-react";
 import { api } from "../api/client";
+import { TenderLibrary } from "../components/TenderLibrary";
 import { useI18n } from "../i18n";
 
 /** The entry page: the only thing to do is upload a tender PDF. */
@@ -103,6 +104,8 @@ export function UploadPage() {
             </li>
           ))}
         </ol>
+
+        <TenderLibrary />
       </div>
     </div>
   );

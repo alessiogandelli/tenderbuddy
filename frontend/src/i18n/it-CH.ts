@@ -41,6 +41,12 @@ export const itCH: Messages = {
       body: "Vedi da dove viene ogni voce, correggi ciò che non è chiaro, poi leggi il prezzo.",
     },
   },
+  library: {
+    title: "Bandi già letti",
+    subtitle: "Tutti i bandi dell'archivio, con le pagine elaborate.",
+    progress: "{read} di {total} pagine",
+    failed: "Lettura interrotta",
+  },
   processing: {
     title: "Lettura del bando",
     titleVision: "Ricerca delle posizioni",

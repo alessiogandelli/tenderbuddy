@@ -44,6 +44,12 @@ export const en = {
       body: "See where each item comes from, fix what is unclear, then read the price.",
     },
   },
+  library: {
+    title: "Tenders we have read",
+    subtitle: "Every tender in the archive, with the pages we processed.",
+    progress: "{read} of {total} pages",
+    failed: "Reading stopped",
+  },
   processing: {
     title: "Reading the tender",
     titleVision: "Finding the positions",

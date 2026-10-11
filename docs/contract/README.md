@@ -113,7 +113,10 @@ Rules:
   "created_at": "...", "updated_at": "...",
   "pipeline": { "step": "...", "status": "..." },
   "coverage": { ... },
-  "totals": { "direct_cost_chf": 372700.12, "indicative_price_chf": 438612.83 }
+  "totals": { "direct_cost_chf": 372700.12, "indicative_price_chf": 438612.83 },
+  // Additive. The AI overview's one-liner, and the per-page types so the archive
+  // can draw the page tape without loading the whole Bando.
+  "overview_summary": "...", "page_types": [ { "page": 1, "type": "cover" } ]
 }
 ```
 

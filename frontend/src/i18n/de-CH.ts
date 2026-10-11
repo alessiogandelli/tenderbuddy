@@ -42,6 +42,12 @@ export const deCH: Messages = {
       body: "Sehen Sie, woher jede Position stammt, korrigieren Sie Unklares und lesen Sie den Preis.",
     },
   },
+  library: {
+    title: "Gelesene Ausschreibungen",
+    subtitle: "Jede Ausschreibung im Archiv, mit den verarbeiteten Seiten.",
+    progress: "{read} von {total} Seiten",
+    failed: "Lesen abgebrochen",
+  },
   processing: {
     title: "Die Ausschreibung wird gelesen",
     titleVision: "Positionen werden gesucht",

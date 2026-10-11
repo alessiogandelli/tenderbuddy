@@ -288,6 +288,13 @@ class Bando(BaseModel):
     offer_cover: Optional[OfferCover] = None
 
 
+class PageTypeEntry(BaseModel):
+    """The minimal page-type pair the archive's page tape needs."""
+
+    page: int
+    type: PageType = PageType.OTHER
+
+
 class BandoSummary(BaseModel):
     """Compact Bando used by the archive listing."""
 
@@ -303,6 +310,12 @@ class BandoSummary(BaseModel):
     pipeline: PipelineState
     coverage: Coverage
     totals: BandoTotals
+    # Additive: the AI overview's one-liner, so the archive can show it without
+    # loading the whole Bando. None when the run produced no overview.
+    overview_summary: Optional[str] = None
+    # Additive: the per-page types, so the archive can draw the page tape. Kept
+    # compact (page + type only): the listing is polled while a run is live.
+    page_types: List[PageTypeEntry] = Field(default_factory=list)
 
 
 class Product(BaseModel):

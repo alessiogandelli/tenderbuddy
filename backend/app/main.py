@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api import bandi, catalog, health
 from .config import ALLOWED_ORIGINS, REPO_ROOT
+from .storage import store as storage
 
 
 class SpaStaticFiles(StaticFiles):
@@ -33,6 +34,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         description="Turns a tender PDF into a priced quote.",
     )
+
+    # The archive index is a cache; upgrade it when it predates a summary field
+    # the library needs (overview one-liner, page types for the page tape).
+    storage.rebuild_index()
 
     app.add_middleware(
         CORSMiddleware,

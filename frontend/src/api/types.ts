@@ -310,6 +310,16 @@ export interface BandoSummary {
   pipeline: PipelineState;
   coverage: Coverage;
   totals: BandoTotals;
+  /** The AI overview's one-liner, for the archive listing. */
+  overview_summary?: string | null;
+  /** The per-page types, so the archive can draw the page tape (compact). */
+  page_types?: PageTypeEntry[];
+}
+
+/** The minimal page-type pair the archive's page tape needs. */
+export interface PageTypeEntry {
+  page: number;
+  type: PageType;
 }
 
 export interface Product {

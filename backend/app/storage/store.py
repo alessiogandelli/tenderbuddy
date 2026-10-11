@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..config import BANDI_DIR, INDEX_PATH, ensure_runtime
-from ..domain.models import Bando, BandoSummary, BandoTotals
+from ..domain.models import Bando, BandoSummary, BandoTotals, PageTypeEntry
 
 # The pipeline runs in a background thread and saves on every step while the UI
 # polls, so writes must not interleave.
@@ -111,6 +111,8 @@ def _summarize(bando: Bando) -> BandoSummary:
             direct_cost_chf=bando.summary.direct_cost_chf,
             indicative_price_chf=bando.summary.indicative_selling_price_chf,
         ),
+        overview_summary=bando.overview.summary if bando.overview else None,
+        page_types=[PageTypeEntry(page=p.page, type=p.type) for p in bando.page_types],
     )
 
 
@@ -126,6 +128,58 @@ def _save_index(summaries: List[BandoSummary]) -> None:
 
 def list_bandi() -> List[BandoSummary]:
     return sorted(_load_index(), key=lambda s: s.created_at, reverse=True)
+
+
+def _index_is_stale() -> bool:
+    """True when the stored index predates a field (or field shape) we need.
+
+    Checks both for a missing ``page_types`` and for the older verbose form that
+    carried ``confidence``/``reason`` per page (the compact tape only needs page
+    and type), so an upgraded index is rewritten once and stays small.
+    """
+    raw = _read_json(INDEX_PATH) or {"bandi": []}
+    for entry in raw.get("bandi", []):
+        if "page_types" not in entry:
+            return True
+        for page_type in entry.get("page_types") or []:
+            if isinstance(page_type, dict) and (
+                "confidence" in page_type or "reason" in page_type
+            ):
+                return True
+    return False
+
+
+def rebuild_index() -> None:
+    """Rewrite the index from the Bandi on disk, backfilling new summary fields.
+
+    The index is a cache; the per-tender ``bando.json`` files are the truth.
+    Run once at startup so entries written before a field existed are upgraded.
+    A Bando that fails to load keeps its previous (field-less) summary, so a
+    single bad file never empties the archive.
+    """
+    if not _index_is_stale():
+        return
+    ensure_runtime()
+    previous = {summary.id: summary for summary in _load_index()}
+    ids: set[str] = set()
+    for entry in BANDI_DIR.iterdir():
+        if entry.is_dir():
+            ids.add(entry.name)
+        elif entry.suffix == ".json":
+            ids.add(entry.stem)
+    summaries: List[BandoSummary] = []
+    for bando_id in ids:
+        try:
+            bando = get_bando(bando_id)
+        except Exception:  # noqa: BLE001 - a single unreadable file must not abort
+            bando = None
+        if bando is not None:
+            summaries.append(_summarize(bando))
+        elif bando_id in previous:
+            summaries.append(previous[bando_id])
+    if summaries:
+        with _LOCK:
+            _save_index(summaries)
 
 
 # ---------------------------------------------------------------------------

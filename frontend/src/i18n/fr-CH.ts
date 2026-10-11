@@ -41,6 +41,12 @@ export const frCH: Messages = {
       body: "Voyez d'où vient chaque position, corrigez ce qui n'est pas clair, puis lisez le prix.",
     },
   },
+  library: {
+    title: "Appels d'offres lus",
+    subtitle: "Chaque appel d'offres de l'archive, avec les pages traitées.",
+    progress: "{read} sur {total} pages",
+    failed: "Lecture interrompue",
+  },
   processing: {
     title: "Lecture de l'appel d'offres",
     titleVision: "Recherche des positions",
