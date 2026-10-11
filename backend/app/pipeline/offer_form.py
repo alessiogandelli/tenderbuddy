@@ -230,6 +230,24 @@ def format_value(value: float, kind: str) -> str:
     return f"{whole.replace(',', chr(39))}.{cents}"
 
 
+def write_on_leader(
+    page: fitz.Page, rect: fitz.Rect, baseline: float, text: str, align: str = "right"
+) -> None:
+    """White out a dotted leader and write ``text`` on its line.
+
+    ``baseline`` is an absolute y in page points. The text is shrunk to fit the
+    leader and aligned to its right edge (amounts) or left edge (labels/names).
+    """
+    page.draw_rect(rect, color=None, fill=(1, 1, 1), overlay=True)
+    size = 9.0
+    width = fitz.get_text_length(text, fontname="helv", fontsize=size)
+    if width > rect.width:
+        size = max(5.0, size * rect.width / width)
+        width = fitz.get_text_length(text, fontname="helv", fontsize=size)
+    x = rect.x1 - width if align == "right" else rect.x0
+    page.insert_text(fitz.Point(x, baseline), text, fontname="helv", fontsize=size)
+
+
 def fill_offer_form(doc: fitz.Document, form: OfferForm, values: Dict[str, Optional[float]]) -> int:
     """Write the values into the form page of an open document; returns how many."""
     if form.page is None or not (1 <= form.page <= doc.page_count):
@@ -243,15 +261,6 @@ def fill_offer_form(doc: fitz.Document, form: OfferForm, values: Dict[str, Optio
             continue
         rect = fitz.Rect(field.bbox[0] * W, field.bbox[1] * H, field.bbox[2] * W, field.bbox[3] * H)
         # The value replaces the dotted leader: cover it, then write on its line.
-        page.draw_rect(rect, color=None, fill=(1, 1, 1), overlay=True)
-        text = format_value(value, field.kind)
-        size = 9.0
-        width = fitz.get_text_length(text, fontname="helv", fontsize=size)
-        if width > rect.width:
-            size = max(5.0, size * rect.width / width)
-            width = fitz.get_text_length(text, fontname="helv", fontsize=size)
-        page.insert_text(
-            fitz.Point(rect.x1 - width, field.baseline * H), text, fontname="helv", fontsize=size
-        )
+        write_on_leader(page, rect, field.baseline * H, format_value(value, field.kind))
         written += 1
     return written

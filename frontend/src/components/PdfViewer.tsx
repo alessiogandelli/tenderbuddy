@@ -15,7 +15,7 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { ChevronLeft, ChevronRight, Minus, MoveHorizontal, Plus, SquareDashed } from "lucide-react";
-import type { FormField, Item, PageType, PositionResult } from "../api/types";
+import type { CoverField, FormField, Item, PageType, PositionResult } from "../api/types";
 import type { ItemState } from "../lib/flags";
 import { PAGE_TYPE_COLORS } from "../lib/pageTypes";
 import { cellAnchor, readTextRuns, type CellAnchor, type TextRun } from "../lib/pageText";
@@ -23,6 +23,7 @@ import { useI18n } from "../i18n";
 import type { ItemPatch } from "./ItemCard";
 import { PriceCell } from "./PriceCell";
 import { FormCell } from "./FormCell";
+import { CoverCell } from "./CoverCell";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -83,6 +84,9 @@ interface PageProps {
   formFields: FormField[];
   formValues: Record<string, number | null>;
   onSaveFormField: (fieldId: string, value: number | null) => Promise<void>;
+  /** The cover blanks on this page, and their computed values. */
+  coverFields: CoverField[];
+  coverValues: Record<string, string | null>;
   register: (page: number, node: HTMLDivElement | null) => void;
 }
 
@@ -107,6 +111,8 @@ const PdfPage = memo(function PdfPage({
   formFields,
   formValues,
   onSaveFormField,
+  coverFields,
+  coverValues,
   register,
 }: PageProps) {
   const { t } = useI18n();
@@ -271,6 +277,16 @@ const PdfPage = memo(function PdfPage({
             onSave={(value) => onSaveFormField(field.id, value)}
           />
         ))}
+        {/* The cover: the bidder and the Netto, as the export writes them. */}
+        {coverFields.map((field) => (
+          <CoverCell
+            key={field.id}
+            field={field}
+            value={coverValues[field.id] ?? null}
+            style={rectOf(field.bbox)}
+            outlined={showBoxes}
+          />
+        ))}
         {/* The prices are the offer's content: always shown, like the print. */}
         {items.map((item) => {
           if (!item.price_bbox) return null;
@@ -324,6 +340,8 @@ export const PdfViewer = forwardRef<
     formFields: FormField[];
     formValues: Record<string, number | null>;
     onSaveFormField: (fieldId: string, value: number | null) => Promise<void>;
+    coverFields: CoverField[];
+    coverValues: Record<string, string | null>;
   }
 >(function PdfViewer(
   {
@@ -343,6 +361,8 @@ export const PdfViewer = forwardRef<
     formFields,
     formValues,
     onSaveFormField,
+    coverFields,
+    coverValues,
   },
   ref,
 ) {
@@ -426,6 +446,12 @@ export const PdfViewer = forwardRef<
     return map;
   }, [formFields]);
   const noFields = useMemo<FormField[]>(() => [], []);
+  const coverByPage = useMemo(() => {
+    const map = new Map<number, CoverField[]>();
+    for (const field of coverFields) map.set(field.page, [...(map.get(field.page) ?? []), field]);
+    return map;
+  }, [coverFields]);
+  const noCover = useMemo<CoverField[]>(() => [], []);
 
   const byPage = useMemo(() => {
     const map = new Map<number, Item[]>();
@@ -556,6 +582,8 @@ export const PdfViewer = forwardRef<
                 formFields={fieldsByPage.get(pageNumber) ?? noFields}
                 formValues={formValues}
                 onSaveFormField={onSaveFormField}
+                coverFields={coverByPage.get(pageNumber) ?? noCover}
+                coverValues={coverValues}
                 register={register}
               />
             ))}

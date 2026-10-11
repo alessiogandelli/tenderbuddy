@@ -15,8 +15,9 @@ from pydantic import BaseModel
 
 from .. import storage
 from ..domain.enums import Classification, ItemStatus, PipelineStatus, PipelineStep, PriceSource, Unit
-from ..domain.models import Bando, Item, Match, OfferForm
+from ..domain.models import Bando, Item, Match, OfferCover, OfferForm
 from ..pipeline.extractors import default_reader
+from ..pipeline.offer_cover import compute_cover, detect_offer_cover, fill_offer_cover
 from ..pipeline.offer_form import compute_offer_form, detect_offer_form, fill_offer_form
 from ..pipeline.offer_pdf import OfferEntry, fill_offer
 from ..pipeline.pricing import offer_amount, scenario_margin_pct
@@ -168,12 +169,19 @@ def get_bando(bando_id: str) -> dict:
         storage.save_bando(bando)
     # Tenders read before the offer form existed: look for its fields once.
     pdf = storage.pdf_path(bando_id)
-    if bando.offer_form is None and bando.pipeline.status == PipelineStatus.DONE and pdf.exists():
-        try:
-            bando.offer_form = detect_offer_form(pdf, bando.page_types)
-        except Exception:  # noqa: BLE001 - an unreadable form is just not filled
-            bando.offer_form = OfferForm()
-        storage.save_bando(bando)
+    if bando.pipeline.status == PipelineStatus.DONE and pdf.exists():
+        if bando.offer_form is None:
+            try:
+                bando.offer_form = detect_offer_form(pdf, bando.page_types)
+            except Exception:  # noqa: BLE001 - an unreadable form is just not filled
+                bando.offer_form = OfferForm()
+            storage.save_bando(bando)
+        if bando.offer_cover is None:
+            try:
+                bando.offer_cover = detect_offer_cover(pdf, bando.page_types)
+            except Exception:  # noqa: BLE001 - an unreadable cover is just not filled
+                bando.offer_cover = OfferCover()
+            storage.save_bando(bando)
     return bando.model_dump(mode="json")
 
 
@@ -350,26 +358,45 @@ def _offer_lines(bando: Bando, body: OfferExport):
 
 
 def _form_values(bando: Bando, entries) -> dict:
-    form = bando.offer_form
-    if form is None or not form.fields:
-        return {}
+    # The conditions chain (and so the Netto) is computed even when no form page
+    # was found: the cover prints the same Netto.
+    form = bando.offer_form or OfferForm()
     brutto = sum(entry.amount_chf for _, entry in entries)
     return compute_offer_form(form, brutto, bando.parameters or {})
+
+
+def _cover_values(bando: Bando, netto: Optional[float]) -> dict:
+    """The cover's values: the bidder's identity and the computed Netto.
+
+    The dataset defaults fill any key the Bando's own parameters predate (e.g. a
+    ``bidder`` block added after the tender was saved), tightened by the Bando's.
+    """
+    params = _deep_merge(copy.deepcopy(get_pricing_db().parameters), bando.parameters or {})
+    return compute_cover(bando.offer_cover, netto, params)
 
 
 @router.post("/{bando_id}/offer-form/values")
 def offer_form_values(bando_id: str, body: OfferExport) -> dict:
     """The offer form filled for these positions and this bid scenario, the
-    same values the export writes. Fields left empty are null."""
+    same values the export writes. Fields left empty are null. The cover's
+    values (the bidder and the Netto) ride along, so the UI can show them too."""
     bando = _get_or_404(bando_id)
     try:
         entries, _ = _offer_lines(bando, body)
     except KeyError:
         return _error(400, "invalid_input", "Unknown scenario %s" % body.scenario)
+    values = _form_values(bando, entries)
+    cover = None
+    if bando.offer_cover is not None:
+        cover = {
+            "page": bando.offer_cover.page,
+            "values": _cover_values(bando, values.get("conditions.netto.eingabe")),
+        }
     return {
         "page": bando.offer_form.page if bando.offer_form else None,
         "brutto_chf": round(sum(entry.amount_chf for _, entry in entries), 2),
-        "values": _form_values(bando, entries),
+        "values": values,
+        "cover": cover,
     }
 
 
@@ -422,10 +449,16 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
 
     values = _form_values(bando, entries)
     form_written = [0]
+    cover_written = [0]
 
     def fill_form(doc) -> None:
         if bando.offer_form is not None:
             form_written[0] = fill_offer_form(doc, bando.offer_form, values)
+        if bando.offer_cover is not None:
+            netto = values.get("conditions.netto.eingabe")
+            cover_written[0] = fill_offer_cover(
+                doc, bando.offer_cover, _cover_values(bando, netto)
+            )
 
     filled = fill_offer(pdf, entries, also=fill_form)
     stem = re.sub(r"\.pdf$", "", bando.source_file or bando_id, flags=re.I)
@@ -438,6 +471,7 @@ def export_offer_pdf(bando_id: str, body: OfferExport) -> Response:
             "X-Offer-Written": str(filled.written),
             "X-Offer-Skipped": str(len(skipped) + len(filled.skipped)),
             "X-Offer-Form-Written": str(form_written[0]),
+            "X-Offer-Cover-Written": str(cover_written[0]),
         },
     )
 

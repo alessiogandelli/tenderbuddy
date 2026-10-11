@@ -246,11 +246,29 @@ export interface OfferForm {
   printed_rates: Record<string, number>;
 }
 
+/** One fillable blank of the cover page (a dotted leader in the PDF). */
+export interface CoverField {
+  id: string;
+  page: number;
+  bbox: number[];
+  /** The blank's baseline, 0..1 of the page height. */
+  baseline: number;
+  row: string;
+  label: string;
+}
+
+export interface OfferCover {
+  page: number | null;
+  fields: CoverField[];
+}
+
 /** The offer form filled for a set of positions and a bid scenario. */
 export interface OfferFormValues {
   page: number | null;
   brutto_chf: number;
   values: Record<string, number | null>;
+  /** The cover's values (the bidder and the Netto), when the tender has a cover. */
+  cover: { page: number | null; values: Record<string, string | null> } | null;
 }
 
 export interface Bando {
@@ -276,6 +294,7 @@ export interface Bando {
   parameters: ProjectParameters | null;
   usage: Usage | null;
   offer_form?: OfferForm | null;
+  offer_cover?: OfferCover | null;
 }
 
 export interface BandoSummary {

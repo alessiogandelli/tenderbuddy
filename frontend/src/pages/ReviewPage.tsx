@@ -57,22 +57,27 @@ export function ReviewPage() {
   const onPdfSelect = useCallback((lvId: string) => select(lvId, "pdf"), [select]);
   const onShowInPdf = useCallback((lvId: string) => select(lvId, "list"), [select]);
 
-  // The offer form, filled from the final (black) prices: what the export
-  // prints by default. The backend computes it; it follows every change.
+  // The offer form and the cover, filled from the final (black) prices: what
+  // the export prints by default. The backend computes them; they follow every
+  // change.
   const [formValues, setFormValues] = useState<Record<string, number | null>>({});
+  const [coverValues, setCoverValues] = useState<Record<string, string | null>>({});
   const finalIds = useMemo(
     () => bando.items.filter((item) => ["priced", "manual"].includes(states.get(item.lv_id) ?? "")).map((item) => item.lv_id),
     [bando.items, states],
   );
   const hasForm = (bando.offer_form?.fields.length ?? 0) > 0;
+  const hasCover = (bando.offer_cover?.fields.length ?? 0) > 0;
   useEffect(() => {
-    if (!hasForm) return;
+    if (!hasForm && !hasCover) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       api
         .offerFormValues(bando.id, { lv_ids: finalIds, scenario })
         .then((filled) => {
-          if (!cancelled) setFormValues(filled.values);
+          if (cancelled) return;
+          setFormValues(filled.values);
+          setCoverValues(filled.cover?.values ?? {});
         })
         .catch(() => undefined);
     }, 120);
@@ -80,7 +85,7 @@ export function ReviewPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [bando, finalIds, scenario, hasForm]);
+  }, [bando, finalIds, scenario, hasForm, hasCover]);
   const saveFormField = useCallback(
     async (fieldId: string, value: number | null) => {
       setBando(await api.patchFormField(bando.id, fieldId, value));
@@ -162,6 +167,8 @@ export function ReviewPage() {
                 formFields={bando.offer_form?.fields ?? NO_FIELDS}
                 formValues={formValues}
                 onSaveFormField={saveFormField}
+                coverFields={bando.offer_cover?.fields ?? NO_FIELDS}
+                coverValues={coverValues}
                 leading={
                   <button
                     type="button"

@@ -199,6 +199,30 @@ class OfferForm(BaseModel):
     printed_rates: Dict[str, float] = Field(default_factory=dict)
 
 
+class CoverField(BaseModel):
+    """One fillable blank of the cover page (a dotted leader in the PDF).
+
+    The cover carries text, not numbers: the bidder's identity and the offer
+    total. Values are computed, never typed, so there is no override.
+    """
+
+    id: str  # "cover.<row>", e.g. "cover.name", "cover.eingabesumme"
+    page: int
+    bbox: List[float]  # [x0, y0, x1, y1] in 0..1 page space: the leader
+    baseline: float  # the leader's baseline, 0..1 of the page height
+    # name, strasse, plz_ort, telefon, fax, sachbearbeiter, ort_datum,
+    # eingabesumme, unterschrift
+    row: str
+    label: str = ""
+
+
+class OfferCover(BaseModel):
+    """The cover page and its fillable fields (the bidder identification)."""
+
+    page: Optional[int] = None
+    fields: List[CoverField] = Field(default_factory=list)
+
+
 class PipelineState(BaseModel):
     step: PipelineStep = PipelineStep.READ
     status: PipelineStatus = PipelineStatus.PENDING
@@ -259,6 +283,9 @@ class Bando(BaseModel):
     # Additive: the fillable fields of the first offer-form page (None = not
     # looked for yet; an empty field list = no form found).
     offer_form: Optional[OfferForm] = None
+    # Additive: the fillable fields of the cover page (None = not looked for
+    # yet; an empty field list = no cover found).
+    offer_cover: Optional[OfferCover] = None
 
 
 class BandoSummary(BaseModel):
