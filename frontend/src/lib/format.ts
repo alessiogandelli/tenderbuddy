@@ -69,3 +69,9 @@ export function formatCompact(value: number | null | undefined): string {
   const thousands = value / 1000;
   return `${numberFormat({ maximumFractionDigits: abs < 100_000 ? 1 : 0 }).format(thousands)}k`;
 }
+
+/** An amount with two decimals and the locale's separators, no currency: 1'196.00. */
+export function formatAmount(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return numberFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}

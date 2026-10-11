@@ -226,8 +226,8 @@ const PdfPage = memo(function PdfPage({
       }}
       style={{ "--pc": color } as CSSProperties}
     >
-      <div className="pg__label">
-        <span className="pg__num">{t("pdf.page", { page: pageNumber })}</span>
+      {/* The page type rides on the sheet's top edge; the page number is in the toolbar. */}
+      <div className="pg__label" aria-label={t("pdf.page", { page: pageNumber })}>
         <span className="pg__type">{type ? t(`pageType.${type}`) : t("pdf.unclassified")}</span>
       </div>
       <div
@@ -524,7 +524,11 @@ export const PdfViewer = forwardRef<
 
   useEffect(() => onPageChange(current), [current, onPageChange]);
 
-  // Bring the selected item's row into view, a third down the viewport.
+  // Bring the selected item's row into view, a third down the viewport. A
+  // nearby row is reached by a plain smooth scroll. A far one would stream
+  // dozens of half-drawn pages past, so the pages fade out, the view jumps to
+  // just short of the row, waits for that page to be drawn, then fades back in
+  // while gliding the last stretch; the row's box pulses once on arrival.
   useEffect(() => {
     if (!focusKey || !selectedId || !scroller) return;
     const item = items.find((candidate) => candidate.lv_id === selectedId);
@@ -535,7 +539,52 @@ export const PdfViewer = forwardRef<
     const sheet = node.querySelector<HTMLElement>(".pg__sheet");
     const sheetTop = node.offsetTop + (sheet?.offsetTop ?? 0);
     const y = box ? sheetTop + box[1] * (sheet?.offsetHeight ?? node.offsetHeight) : node.offsetTop;
-    scroller.scrollTo({ top: Math.max(y - scroller.clientHeight * 0.3, 0), behavior: "smooth" });
+    const top = Math.max(y - scroller.clientHeight * 0.3, 0);
+    const distance = top - scroller.scrollTop;
+
+    let cancelled = false;
+    const timers: number[] = [];
+    const later = (ms: number) =>
+      new Promise<void>((resolve) => timers.push(window.setTimeout(resolve, ms)));
+    const pulse = () => {
+      const hl = node.querySelector<HTMLElement>(".hl.is-active");
+      if (!hl) return;
+      hl.classList.remove("is-arriving");
+      void hl.offsetWidth; // restart the animation
+      hl.classList.add("is-arriving");
+    };
+
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still || Math.abs(distance) < scroller.clientHeight * 1.5) {
+      scroller.scrollTo({ top, behavior: still ? "auto" : "smooth" });
+      if (!still) void later(Math.min(Math.abs(distance), 600) + 120).then(() => !cancelled && pulse());
+      return () => {
+        cancelled = true;
+        timers.forEach(window.clearTimeout);
+      };
+    }
+
+    void (async () => {
+      scroller.classList.add("is-jumping");
+      await later(170);
+      if (cancelled) return;
+      // Land a little short, on the side we come from, to glide the rest.
+      scroller.scrollTop = top - Math.sign(distance) * scroller.clientHeight * 0.28;
+      const canvas = sheet?.querySelector("canvas");
+      for (let waited = 0; waited < 500 && canvas && canvas.width === 0; waited += 40) {
+        await later(40);
+        if (cancelled) return;
+      }
+      scroller.classList.remove("is-jumping");
+      scroller.scrollTo({ top, behavior: "smooth" });
+      await later(420);
+      if (!cancelled) pulse();
+    })();
+    return () => {
+      cancelled = true;
+      timers.forEach(window.clearTimeout);
+      scroller.classList.remove("is-jumping");
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
 

@@ -6,7 +6,6 @@ import type { ItemPatch } from "../components/ItemCard";
 import { PageRail } from "../components/PageRail";
 import { PdfViewer, type PdfViewerHandle } from "../components/PdfViewer";
 import { SplitLayout } from "../components/SplitLayout";
-import { TenderDigest } from "../components/TenderDigest";
 import { itemState, type ItemState } from "../lib/flags";
 import { pageTypeMap } from "../lib/pageTypes";
 import { useI18n } from "../i18n";
@@ -108,7 +107,6 @@ export function ReviewPage() {
       <SplitLayout
         left={(split) => (
           <section className="review__list">
-            <TenderDigest bando={bando} />
             <ItemList
               items={bando.items}
               results={results}

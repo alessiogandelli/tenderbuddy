@@ -3,7 +3,7 @@
 // transport, cost baseline), the chosen bid scenario (the offer, rounded up)
 // and the per-position results. The only arithmetic here is the margin of the
 // chosen offer (offer − cost baseline) and the shares shown in tooltips.
-import type { Bando, Item, PositionResult } from "../api/types";
+import type { Bando, Item, PositionResult, Summary } from "../api/types";
 import { itemName } from "./items";
 import type { ItemState } from "./flags";
 
@@ -159,4 +159,27 @@ export function buildWaterfall(
   step("margin", offer - summary.cost_baseline_chf);
   total("offer", offer);
   return columns;
+}
+
+export type PartKey = "material" | "labour" | "project" | "overhead" | "transport" | "margin";
+
+/**
+ * The offer split into what it is made of, as the backend's summary gives it;
+ * the margin is what the offer adds to the cost baseline. The parts add up to
+ * the offer. Project costs appear only when they are in the price.
+ */
+export function priceParts(summary: Summary, offer: number): { key: PartKey; amount: number }[] {
+  const parts: { key: PartKey; amount: number }[] = [
+    { key: "material", amount: summary.material_cost_chf },
+    { key: "labour", amount: summary.labour_cost_chf },
+  ];
+  if (summary.include_project_costs && summary.project_costs_chf > 0) {
+    parts.push({ key: "project", amount: summary.project_costs_chf });
+  }
+  parts.push(
+    { key: "overhead", amount: summary.overhead_chf ?? 0 },
+    { key: "transport", amount: summary.transport_equipment_chf ?? 0 },
+    { key: "margin", amount: offer - summary.cost_baseline_chf },
+  );
+  return parts;
 }

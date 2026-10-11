@@ -5,6 +5,7 @@ import type { Bando, Product, ProductivityRule } from "../api/types";
 import { ProcessingStage } from "../components/ProcessingStage";
 import { StepBar } from "../components/StepBar";
 import { TapeMorph, type MorphStart } from "../components/TapeMorph";
+import { TenderTitle } from "../components/TenderTitle";
 import { PIPELINE_ORDER } from "../lib/flags";
 import { useI18n } from "../i18n";
 import { readScenario, saveScenario } from "../lib/scenario";
@@ -173,6 +174,7 @@ export function TenderPage() {
 
   return (
     <div className={`tender ${phase === "morph" ? "is-arriving" : ""}`}>
+      <TenderTitle bando={bando} />
       <div className="tender__body">
         <Outlet context={context} />
       </div>

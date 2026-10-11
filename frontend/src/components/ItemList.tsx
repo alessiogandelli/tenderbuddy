@@ -179,23 +179,6 @@ export function ItemList({
   return (
     <div className={`items ${selectedId ? "has-focus" : ""}`} onKeyDown={onKeyDown}>
       <div className="items__head">
-        <div className="items__toolbar">
-        <label className="search">
-          <Search size={16} aria-hidden />
-          <input
-            value={query}
-            placeholder={t("items.search")}
-            aria-label={t("items.search")}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {query && (
-            <button type="button" aria-label={t("common.clear")} onClick={() => setQuery("")}>
-              <X size={14} />
-            </button>
-          )}
-        </label>
-        {headerAction}
-        </div>
         <div className="filters" role="tablist" aria-label={t("items.filterAria")}>
           {FILTERS.map((key) => (
             <button
@@ -224,6 +207,28 @@ export function ItemList({
             </button>
           )}
         </div>
+        {/* The search is a magnifier that opens on hover or focus (and stays open while it holds text). */}
+        <label className={`search search--icon ${query ? "is-filled" : ""}`} title={t("items.search")}>
+          <Search size={17} aria-hidden />
+          <input
+            value={query}
+            placeholder={t("items.search")}
+            aria-label={t("items.search")}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.stopPropagation();
+                setQuery("");
+              }
+            }}
+          />
+          {query && (
+            <button type="button" aria-label={t("common.clear")} onClick={() => setQuery("")}>
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        {headerAction}
       </div>
 
       <div className="items__cols" aria-hidden>

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { Column, ColumnKey, SegmentStatus } from "../lib/waterfall";
 import { formatChf, formatCompact, formatNumber } from "../lib/format";
 import { useI18n } from "../i18n";
@@ -45,10 +45,13 @@ interface Target {
 export function Waterfall({
   columns,
   offer,
+  counts,
   describe,
   onOpenItems,
 }: {
   columns: Column[];
+  /** Positions by price state, for the legend. */
+  counts: { verified: number; check: number; open: number };
   /** The offer the shares are taken of. */
   offer: number;
   /** The calculation base of a column, in plain words. */
@@ -194,6 +197,7 @@ export function Waterfall({
             <line
               key={`c-${column.key}`}
               className="wf__connector"
+              style={{ "--i": index } as CSSProperties}
               x1={x(index) + barWidth}
               x2={x(index + 1)}
               y1={y(level)}
@@ -209,7 +213,7 @@ export function Waterfall({
             const top = y(column.from) - GHOST_HEIGHT;
             const target = targets.find((entry) => entry.id === column.key)!;
             return (
-              <g key={column.key}>
+              <g key={column.key} style={{ "--i": index } as CSSProperties}>
                 {hit(target, { x: x(index), y: top, width: barWidth, height: GHOST_HEIGHT }, {
                   fill: "transparent",
                   stroke: color,
@@ -225,7 +229,7 @@ export function Waterfall({
           if (column.segments) {
             let base = column.from;
             return (
-              <g key={column.key}>
+              <g key={column.key} style={{ "--i": index } as CSSProperties}>
                 {column.segments.map((segment) => {
                   if (segment.amount <= 0) return null;
                   const from = base;
@@ -249,7 +253,7 @@ export function Waterfall({
           const top = y(column.to);
           const bottom = y(column.kind === "total" ? 0 : column.from);
           return (
-            <g key={column.key}>
+            <g key={column.key} style={{ "--i": index } as CSSProperties}>
               {hit(target, { x: x(index), y: top, width: barWidth, height: bottom - top }, { fill: color })}
               <text
                 className={`wf__label ${column.kind === "total" ? "wf__label--total" : ""}`}
@@ -269,6 +273,12 @@ export function Waterfall({
             {name(column)}
           </span>
         ))}
+        {/* Material and labour are the priced positions: verified + to check. */}
+        <span className="wf__brace" style={{ gridColumn: "1 / 3" }}>
+          <span className="wf__brace-label">
+            {t("price.mix.priced")} · {t("price.items", { count: counts.verified + counts.check })}
+          </span>
+        </span>
       </div>
 
       {activeTarget && activeColumn && (
@@ -332,20 +342,28 @@ export function Waterfall({
         </div>
       )}
 
-      <ul className="wf__legend">
-        <li>
-          <span className="wf__key wf__key--solid" />
-          {t("price.legend.verified")}
-        </li>
-        <li>
-          <span className="wf__key wf__key--hatch" />
-          {t("price.legend.check")}
-        </li>
-        <li>
-          <span className="wf__key wf__key--ghost" />
-          {t("price.legend.unpriced")}
-        </li>
-      </ul>
+      <div className="wf__legend">
+        <div className="wf__legend-group">
+          <span className="wf__legend-title">{t("price.mix.priced")}</span>
+          <span className="wf__legend-item">
+            <span className="wf__key wf__key--solid" />
+            {t("price.legend.verified")} <span className="muted">· {counts.verified}</span>
+          </span>
+          <span className="wf__legend-plus" aria-hidden>
+            +
+          </span>
+          <span className="wf__legend-item">
+            <span className="wf__key wf__key--hatch" />
+            {t("price.legend.check")} <span className="muted">· {counts.check}</span>
+          </span>
+        </div>
+        {counts.open > 0 && (
+          <span className="wf__legend-item wf__legend-item--out">
+            <span className="wf__key wf__key--ghost" />
+            {t("price.legend.unpriced")} <span className="muted">· {counts.open}</span>
+          </span>
+        )}
+      </div>
 
       {/* A table ignores width: 1px, so the visually hidden box wraps it. */}
       <div className="sr-only">

@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
+  ChartColumn,
+  ChartPie,
   CircleCheck,
   Info,
   Loader2,
@@ -15,6 +17,7 @@ import {
 import { api } from "../api/client";
 import type { BidScenario } from "../api/types";
 import { AnimatedChf } from "../components/AnimatedChf";
+import { CostMix } from "../components/CostMix";
 import { Tip } from "../components/Tip";
 import { Waterfall, type ItemsFilter } from "../components/Waterfall";
 import { itemState, type ItemState } from "../lib/flags";
@@ -26,6 +29,16 @@ import { useI18n } from "../i18n";
 import { useTender } from "./tenderContext";
 
 const SCENARIO_ICON: Record<string, LucideIcon> = { Aggressive: Swords, Target, Conservative: Shield };
+const VIEW_KEY = "tenderbuddy.price.chart";
+type ChartView = "bars" | "pie";
+
+function readView(): ChartView {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "pie" ? "pie" : "bars";
+  } catch {
+    return "bars";
+  }
+}
 
 /** One editable parameter chip: click, type, Enter (or leave) to save, Esc to cancel. */
 function ParamChip({
@@ -139,6 +152,16 @@ export function PricePage() {
   }, [bando]);
   const total = bando.items.length;
   const priced = total - counts.open;
+  const legendCounts = { verified: counts.priced + counts.manual, check: counts.check, open: counts.open };
+  const [view, setView] = useState<ChartView>(readView);
+  const chooseView = (next: ChartView) => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* the choice holds for this visit */
+    }
+  };
 
   const columns = useMemo(
     () => buildWaterfall(bando, states, results, animatedOffer),
@@ -329,12 +352,51 @@ export function PricePage() {
 
         <section className="card wf-card" aria-labelledby={`${uid}-chart`}>
           <div className="wf-card__head">
-            <h3 className="card__title" id={`${uid}-chart`}>
-              {t("price.chartTitle")}
-            </h3>
-            <p className="muted wf-card__intro">{t("price.chartIntro")}</p>
+            <div>
+              <h3 className="card__title" id={`${uid}-chart`}>
+                {t("price.chartTitle")}
+              </h3>
+              <p className="muted wf-card__intro">{t(view === "pie" ? "price.mix.intro" : "price.chartIntro")}</p>
+            </div>
+            <div className="vseg" role="radiogroup" aria-label={t("price.view.label")}>
+              {(["bars", "pie"] as ChartView[]).map((option) => {
+                const Icon = option === "bars" ? ChartColumn : ChartPie;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={view === option}
+                    className={`vseg__opt ${view === option ? "is-active" : ""}`}
+                    onClick={() => chooseView(option)}
+                  >
+                    <Icon size={15} aria-hidden /> {t(`price.view.${option}`)}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <Waterfall columns={columns} offer={animatedOffer} describe={describe} onOpenItems={openItems} />
+          {/* Keyed by view: switching replays the chart's entrance. */}
+          <div key={view} className="wf-card__view">
+            {view === "bars" ? (
+              <Waterfall
+                columns={columns}
+                offer={animatedOffer}
+                counts={legendCounts}
+                describe={describe}
+                onOpenItems={openItems}
+              />
+            ) : (
+              <CostMix
+                columns={columns}
+                offer={animatedOffer}
+                scenarioLabel={chosen ? scenarioName(chosen.scenario) : ""}
+                counts={legendCounts}
+                describe={describe}
+                onOpenItems={openItems}
+              />
+            )}
+          </div>
         </section>
       </div>
     </div>
