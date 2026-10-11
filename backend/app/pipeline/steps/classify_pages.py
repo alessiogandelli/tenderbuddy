@@ -8,12 +8,12 @@ light keyword heuristics and default to ``other``. The AI path
 """
 from __future__ import annotations
 
-from typing import List
+from typing import List, Tuple
 
 from ...domain.enums import PageType
 from ...domain.models import PageClassification
-from ..extractors import Document
-from .parse import _has_italian_lv_header
+from ..extractors import Document, Page
+from .parse import _has_italian_lv_header, _is_lv_page
 
 
 def _is_german_table(text: str) -> bool:
@@ -85,8 +85,67 @@ def table_pages(page_types: List[PageClassification]) -> List[int]:
     return [pc.page for pc in page_types if pc.type is PageType.LV_TABLE]
 
 
+def _has_german_table(document: Document) -> bool:
+    """Whether the document carries the six-column German LV form at all."""
+    return any(_is_german_table(page.text) for page in document.pages)
+
+
+def repair_page_types(
+    document: Document, page_types: List[PageClassification]
+) -> List[PageClassification]:
+    """Downgrade impossible ``lv_table`` labels on non-German tenders.
+
+    ``lv_table`` means the six-column German form. A classifier can still emit a
+    stray ``lv_table`` for a page of another layout (an Italian BOQ, a prose
+    page); such a label would narrow extraction to one junk page and hide the
+    real bill of quantities. When the document contains no six-column page at
+    all, every ``lv_table`` label is rebuilt as ``lv_other``. When it does (the
+    Zurich-style tender), the labels are returned untouched, so this is a no-op
+    for the tenders that already work.
+    """
+    if _has_german_table(document):
+        return list(page_types)
+    repaired: List[PageClassification] = []
+    for pc in page_types:
+        if pc.type is PageType.LV_TABLE:
+            pc = pc.model_copy(
+                update={
+                    "type": PageType.LV_OTHER,
+                    "reason": "no six-column header in document",
+                }
+            )
+        repaired.append(pc)
+    return repaired
+
+
+def select_extraction_pages(
+    document: Document, page_types: List[PageClassification]
+) -> Tuple[List[Page], bool]:
+    """The pages to send to extraction, and whether the tender is German.
+
+    German tenders keep the exact behaviour of the six-column path: only the
+    classified ``lv_table`` pages, with the caller falling back to the
+    language-agnostic heuristic when nothing is labelled. Any other layout (the
+    Italian modulo offerta, for instance) has no ``lv_table`` pages once
+    :func:`repair_page_types` has run, so its bill of quantities is the set of
+    ``lv_other`` pages plus the pages the header heuristic recognises.
+    """
+    if _has_german_table(document):
+        numbers = set(table_pages(page_types))
+        return [page for page in document.pages if page.number in numbers], True
+    numbers = {pc.page for pc in page_types if pc.type is PageType.LV_OTHER}
+    pages = [
+        page
+        for page in document.pages
+        if page.number in numbers or _is_lv_page(page.text)
+    ]
+    return pages, False
+
+
 __all__ = [
     "classify_page_deterministic",
     "classify_pages_deterministic",
+    "repair_page_types",
+    "select_extraction_pages",
     "table_pages",
 ]

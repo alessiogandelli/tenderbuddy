@@ -5,6 +5,8 @@ from .classify import classify_document  # noqa: F401
 from .classify_pages import (  # noqa: F401
     classify_page_deterministic,
     classify_pages_deterministic,
+    repair_page_types,
+    select_extraction_pages,
     table_pages,
 )
 from .match import candidate_products, match_items  # noqa: F401
@@ -25,6 +27,8 @@ __all__ = [
     "match_items",
     "parse_document",
     "plausible_quantity",
+    "repair_page_types",
+    "select_extraction_pages",
     "table_pages",
     "_is_lv_page",
     "price_items",

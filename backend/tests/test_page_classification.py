@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from app.domain.enums import PageType
+from app.domain.models import PageClassification
 from app.pipeline.ai.classify_pages import classify_pages
 from app.pipeline.ai.usage import UsageLedger
 from app.pipeline.extractors import Document, Page
 from app.pipeline.steps.classify_pages import (
     classify_pages_deterministic,
+    repair_page_types,
+    select_extraction_pages,
     table_pages,
 )
 
@@ -125,3 +128,69 @@ def test_non_choice_answer_falls_back():
     result = classify_pages(_doc(PROSE), client=client)
 
     assert result[0].type is PageType.LEGAL
+
+
+# ---------------------------------------------------------------------------
+# Repairing stray lv_table labels on non-German tenders (the Italian bug)
+# ---------------------------------------------------------------------------
+def _label(page: int, page_type: PageType, confidence: float = 0.9):
+    return PageClassification(page=page, type=page_type, confidence=confidence)
+
+
+def test_repair_is_a_no_op_when_the_document_has_the_german_form():
+    doc = _doc(GERMAN_TABLE, PROSE)
+    labels = [_label(1, PageType.LV_TABLE), _label(2, PageType.LEGAL)]
+
+    repaired = repair_page_types(doc, labels)
+
+    assert [pc.type for pc in repaired] == [PageType.LV_TABLE, PageType.LEGAL]
+    assert repaired[0] is labels[0]  # untouched, so the Zurich path is identical
+    assert select_extraction_pages(doc, labels) == ([doc.pages[0]], True)
+
+
+def test_repair_downgrades_stray_lv_table_labels_without_the_german_form():
+    # An Italian tender: BOQ pages carry the modulo offerta header, but the
+    # classifier wrongly emitted lv_table for one prose page.
+    doc = _doc(ITALIAN_TABLE, ITALIAN_TABLE, PROSE)
+    labels = [
+        _label(1, PageType.LV_OTHER),
+        _label(2, PageType.LV_OTHER),
+        _label(3, PageType.LV_TABLE, confidence=0.28),
+    ]
+
+    repaired = repair_page_types(doc, labels)
+
+    assert [pc.type for pc in repaired] == [
+        PageType.LV_OTHER,
+        PageType.LV_OTHER,
+        PageType.LV_OTHER,
+    ]
+    assert table_pages(repaired) == []
+
+
+def test_stray_lv_table_does_not_starve_the_italian_boq():
+    # Regression for the uploaded tenders: one stray lv_table page used to be
+    # the only page extracted, dropping every real BOQ page.
+    doc = _doc(ITALIAN_TABLE, ITALIAN_TABLE, PROSE)
+    labels = [
+        _label(1, PageType.LV_OTHER),
+        _label(2, PageType.LV_OTHER),
+        _label(3, PageType.LV_TABLE, confidence=0.33),
+    ]
+
+    repaired = repair_page_types(doc, labels)
+    pages, german = select_extraction_pages(doc, repaired)
+
+    assert german is False
+    assert {page.number for page in pages} >= {1, 2}  # the real BOQ is read
+    assert len(pages) > 1  # not just the stray page
+
+
+def test_german_document_without_labels_selects_nothing_for_the_caller_fallback():
+    doc = _doc(GERMAN_TABLE, PROSE)
+    labels = [_label(1, PageType.OTHER), _label(2, PageType.LEGAL)]
+
+    pages, german = select_extraction_pages(doc, labels)
+
+    assert pages == []
+    assert german is True

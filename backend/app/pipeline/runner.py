@@ -88,10 +88,13 @@ def _classify_pages(
     """Label every page, AI-first with a deterministic fallback (never empty)."""
     if use_ai:
         try:
-            return classify_pages(document, usage=usage, on_progress=on_progress)
+            labels = classify_pages(document, usage=usage, on_progress=on_progress)
+            return steps_pkg.repair_page_types(document, labels)
         except Exception:  # noqa: BLE001 - classification must never lose pages
             pass
-    return steps_pkg.classify_pages_deterministic(document)
+    return steps_pkg.repair_page_types(
+        document, steps_pkg.classify_pages_deterministic(document)
+    )
 
 
 def _detect_offer_form(pdf_path: Path, page_types: List) -> OfferForm:
@@ -119,11 +122,12 @@ def _parse_items(
             [],
         )
 
-    # Only the six-column LV tables are read, and read with the vision engine.
-    table_numbers = set(steps_pkg.table_pages(page_types))
-    pages = [p for p in document.pages if p.number in table_numbers]
+    # Only the six-column LV tables (German) or the classified BOQ pages of
+    # another layout are read with the vision engine; the selection keeps the
+    # Zurich path byte-for-byte identical.
+    pages, _ = steps_pkg.select_extraction_pages(document, page_types)
     if not pages:
-        # No LV table classified: fall back to the header heuristic.
+        # Nothing selected: fall back to the language-agnostic header heuristic.
         pages = lv_pages(document)
     if on_lv_pages:
         on_lv_pages(len(pages))
