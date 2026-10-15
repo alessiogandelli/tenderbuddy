@@ -93,8 +93,8 @@ example tender.
    `api.tenderbuddy.gandelli.dev` → `http://127.0.0.1:8000`.
 2. Workers → Create → Connect to GitHub (`alessiogandelli/tenderbuddy`):
    Root directory `frontend`, Build command `pnpm build`, Deploy command
-   `npx wrangler deploy`, env `VITE_API_BASE=https://api.tenderbuddy.gandelli.dev`
-   and `NODE_VERSION=20`.
+   `npx wrangler deploy`. (`VITE_API_BASE` is baked in via
+   `frontend/.env.production`; set `NODE_VERSION=20` if the build image needs it.)
 3. Workers → `tenderbuddy` → Custom domain: add `tenderbuddy.gandelli.dev`, then
    remove the `tenderbuddy.gandelli.dev` public hostname from the tunnel.
 
