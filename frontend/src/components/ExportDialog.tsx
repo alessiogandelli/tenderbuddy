@@ -4,27 +4,26 @@ import { api } from "../api/client";
 import { useConnection } from "../api/connection";
 import type { Bando } from "../api/types";
 import { itemState, type ItemState } from "../lib/flags";
-import { formatNumber } from "../lib/format";
+import { formatChf, formatNumber } from "../lib/format";
 import { useI18n } from "../i18n";
 
 /**
  * Export the offer: the tender PDF as received, with the selling price of each
  * priced position written in its price cell. Priced and hand-priced positions
  * always go in, positions without a price never do, and the ones still to check
- * only when chosen here.
+ * only when chosen here. The amounts are the strategy chosen on the price page;
+ * the dialog only shows it.
  */
 export function ExportDialog({
   bando,
   open,
   scenario,
-  onScenario,
   onClose,
 }: {
   bando: Bando;
   open: boolean;
-  /** The tender's chosen strategy; changing it here changes it everywhere. */
+  /** The tender's chosen strategy (set on the price page), used as is. */
   scenario: string;
-  onScenario: (scenario: string) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -118,30 +117,17 @@ export function ExportDialog({
           </button>
         </header>
 
-        {scenarios.length > 0 && (
-          <fieldset className="xdlg__block">
-            <legend>{t("export.scenario")}</legend>
-            <div className="xdlg__scenarios">
-              {scenarios.map((entry) => (
-                <label key={entry.scenario} className={`xopt ${entry.scenario === scenario ? "is-active" : ""}`}>
-                  <input
-                    type="radio"
-                    name="export-scenario"
-                    className="sr-only"
-                    checked={entry.scenario === scenario}
-                    onChange={() => {
-                      onScenario(entry.scenario);
-                      setDone(null);
-                    }}
-                  />
-                  <span className="xopt__name">{t(`price.scenario.${entry.scenario}`)}</span>
-                  <span className="xopt__meta">
-                    {t("price.margin")} {pct(entry.margin_pct)}
-                  </span>
-                </label>
-              ))}
+        {chosen && (
+          <div className="xdlg__block">
+            <p className="xdlg__label">{t("export.scenario")}</p>
+            <div className="xopt xopt--fixed">
+              <span className="xopt__name">{t(`price.scenario.${chosen.scenario}`)}</span>
+              <span className="xopt__meta">
+                {t("price.margin")} {pct(chosen.margin_pct)} · {formatChf(chosen.bid_price_chf)}
+              </span>
+              <span className="xopt__hint">{t("export.scenarioHint")}</span>
             </div>
-          </fieldset>
+          </div>
         )}
 
         <div className="xdlg__block">

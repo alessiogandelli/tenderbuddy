@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
-  ChartColumn,
+  ChartBarStacked,
   ChartPie,
   CircleCheck,
   Info,
@@ -19,12 +19,12 @@ import type { BidScenario } from "../api/types";
 import { AnimatedChf } from "../components/AnimatedChf";
 import { CostMix } from "../components/CostMix";
 import { Tip } from "../components/Tip";
-import { Waterfall, type ItemsFilter } from "../components/Waterfall";
+import { PriceRibbon } from "../components/PriceRibbon";
 import { itemState, type ItemState } from "../lib/flags";
 import { formatChf, formatNumber, formatPercent } from "../lib/format";
 import { ALL_FIELDS, clamp, patchFor } from "../lib/parameters";
 import { useTween } from "../lib/useTween";
-import { buildWaterfall, type ColumnKey } from "../lib/waterfall";
+import { buildWaterfall, type ColumnKey, type ItemsFilter } from "../lib/waterfall";
 import { useI18n } from "../i18n";
 import { useTender } from "./tenderContext";
 
@@ -360,7 +360,7 @@ export function PricePage() {
             </div>
             <div className="vseg" role="radiogroup" aria-label={t("price.view.label")}>
               {(["bars", "pie"] as ChartView[]).map((option) => {
-                const Icon = option === "bars" ? ChartColumn : ChartPie;
+                const Icon = option === "bars" ? ChartBarStacked : ChartPie;
                 return (
                   <button
                     key={option}
@@ -379,7 +379,7 @@ export function PricePage() {
           {/* Keyed by view: switching replays the chart's entrance. */}
           <div key={view} className="wf-card__view">
             {view === "bars" ? (
-              <Waterfall
+              <PriceRibbon
                 columns={columns}
                 offer={animatedOffer}
                 counts={legendCounts}

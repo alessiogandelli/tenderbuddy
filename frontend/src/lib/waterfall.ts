@@ -183,3 +183,31 @@ export function priceParts(summary: Summary, offer: number): { key: PartKey; amo
   );
   return parts;
 }
+
+/**
+ * One colour per part of the price. Material and labour also have a lighter
+ * shade of their own colour for the share still to check, so both halves read
+ * as one class.
+ */
+export const COLUMN_COLORS: Record<ColumnKey, string> = {
+  material: "#1b7350",
+  labour: "#1a6b9f",
+  unpriced: "#af2a20",
+  project: "#e89a2c",
+  direct: "#4f6875",
+  overhead: "#6f8794",
+  transport: "#a9bcc4",
+  baseline: "#4f6875",
+  margin: "#002439",
+  offer: "#002439",
+};
+export const CHECK_COLORS: Record<"material" | "labour", string> = {
+  material: "#86c0a3",
+  labour: "#8dbcde",
+};
+
+/** Where clicking a part of a price chart leads in the item list. */
+export interface ItemsFilter {
+  status: "priced" | "check" | "open" | null;
+  component: "material" | "labour" | null;
+}

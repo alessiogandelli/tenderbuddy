@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 
 export interface DonutSegment {
   key: string;
@@ -6,10 +6,10 @@ export interface DonutSegment {
   color: string;
   /** Accessible name, read with the amount. */
   label: string;
-  /** Hatched instead of solid: the "still to check" look of the price chart. */
-  hatched?: boolean;
   /** Can be clicked (or Enter) to open what it stands for. */
   link?: boolean;
+  /** Takes its room on the ring but draws nothing (an outer ring that only splits some arcs). */
+  hidden?: boolean;
 }
 
 export interface DonutRing {
@@ -50,7 +50,6 @@ export function Donut({
   label: string;
   children?: ReactNode;
 }) {
-  const uid = useId().replace(/:/g, "");
   const [grown, setGrown] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setGrown(true));
@@ -59,8 +58,6 @@ export function Donut({
 
   const centre = size / 2;
   const lit = active ? [active] : marked;
-  const hatchColors = [...new Set(rings.flatMap((ring) => ring.segments.filter((s) => s.hatched).map((s) => s.color)))];
-  const hatchId = (color: string) => `${uid}-hatch-${color.replace(/[^a-z0-9]/gi, "")}`;
 
   const onKey = (event: KeyboardEvent, segment: DonutSegment) => {
     if (event.key === "Escape") onActive(null);
@@ -73,21 +70,6 @@ export function Donut({
   return (
     <div className={`donut ${lit.length ? "has-active" : ""}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} role="group" aria-label={label}>
-        <defs>
-          {hatchColors.map((color) => (
-            <pattern
-              key={color}
-              id={hatchId(color)}
-              patternUnits="userSpaceOnUse"
-              width="6"
-              height="6"
-              patternTransform="rotate(45)"
-            >
-              <rect width="6" height="6" fill="#ffffff" />
-              <rect width="2.8" height="6" fill={color} />
-            </pattern>
-          ))}
-        </defs>
         {rings.map((ring, ringIndex) => {
           const circumference = 2 * Math.PI * ring.radius;
           let start = 0;
@@ -98,7 +80,7 @@ export function Donut({
                 const length = total > 0 ? (Math.max(segment.value, 0) / total) * circumference : 0;
                 const from = start;
                 start += length;
-                if (length <= 0) return null;
+                if (length <= 0 || segment.hidden) return null;
                 const visible = grown ? Math.max(length - GAP, 0.6) : 0;
                 const isActive = lit.includes(segment.key);
                 return (
@@ -109,7 +91,7 @@ export function Donut({
                     cy={centre}
                     r={ring.radius}
                     fill="none"
-                    stroke={segment.hatched ? `url(#${hatchId(segment.color)})` : segment.color}
+                    stroke={segment.color}
                     strokeWidth={isActive ? ring.width + 7 : ring.width}
                     strokeDasharray={`${visible} ${circumference}`}
                     strokeDashoffset={grown ? -(from + GAP / 2) : 0}
