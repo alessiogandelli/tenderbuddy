@@ -29,7 +29,7 @@ export interface ApiError {
  * (not a network failure) while the tunnel to the laptop is offline. These mean
  * "backend unreachable", so they fall back to the example like a dead fetch.
  */
-const UPSTREAM_DOWN = new Set([502, 503, 504, 521, 522, 523, 524, 525, 526, 527]);
+const UPSTREAM_DOWN = new Set([502, 503, 504, 521, 522, 523, 524, 525, 526, 527, 530]);
 
 class UpstreamUnavailable extends Error {
   constructor(status: number) {
