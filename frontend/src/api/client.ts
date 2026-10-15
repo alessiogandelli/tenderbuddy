@@ -24,6 +24,20 @@ export interface ApiError {
   message: string;
 }
 
+/**
+ * Cloudflare's "origin down" family: the edge answers with a real HTTP error
+ * (not a network failure) while the tunnel to the laptop is offline. These mean
+ * "backend unreachable", so they fall back to the example like a dead fetch.
+ */
+const UPSTREAM_DOWN = new Set([502, 503, 504, 521, 522, 523, 524, 525, 526, 527]);
+
+class UpstreamUnavailable extends Error {
+  constructor(status: number) {
+    super(`Backend unreachable (HTTP ${status})`);
+    this.name = "UpstreamUnavailable";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Only JSON bodies get a JSON Content-Type. FormData must keep the browser's
   // own multipart boundary, so it is left untouched.
@@ -32,6 +46,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     init?.body && !isForm ? { "Content-Type": "application/json" } : undefined;
   const response = await fetch(`${BASE}/api${path}`, { ...init, headers });
   if (!response.ok) {
+    if (UPSTREAM_DOWN.has(response.status)) throw new UpstreamUnavailable(response.status);
     let error: ApiError = { code: "unknown", message: response.statusText };
     try {
       const body = await response.json();
@@ -45,9 +60,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** A `fetch` that never reached the server, as opposed to an HTTP error. */
+/** A request that never reached the backend, as opposed to an HTTP error. */
 function isNetworkError(error: unknown): boolean {
-  return error instanceof TypeError || (error as { name?: string } | null)?.name === "AbortError";
+  return (
+    error instanceof TypeError ||
+    error instanceof UpstreamUnavailable ||
+    (error as { name?: string } | null)?.name === "AbortError"
+  );
 }
 
 /**
@@ -97,6 +116,15 @@ export const api = {
       },
       () => demoApi.upload(file),
     ),
+
+  /**
+   * Offline only: replay the pipeline on the bundled example, as if a PDF had
+   * been uploaded. The UI offers this only while the example is showing.
+   */
+  simulateUpload: () =>
+    getConnectionMode() === "demo"
+      ? demoApi.simulateUpload()
+      : Promise.reject<Bando>({ code: "live", message: "Simulate is for the offline example." }),
 
   patchBando: (
     id: string,

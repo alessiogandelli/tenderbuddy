@@ -31,6 +31,10 @@ export const itCH: Messages = {
     uploading: "Caricamento di {name}…",
     notPdf: "Non è un PDF. Scegli un file .pdf.",
     error: "Caricamento non riuscito. Il backend è in esecuzione? Riprova.",
+    simulate: "Simula un caricamento",
+    simulateHint:
+      "Il backend è offline: qui il bando di esempio incluso viene eseguito nella pipeline.",
+    simulating: "Esecuzione dell'esempio…",
     step: "Passo {n}",
     how1: {
       title: "Leggiamo il bando",

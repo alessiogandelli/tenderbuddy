@@ -1,0 +1,12 @@
+{
+  // Static SPA deployed as an assets-only Worker. An explicit Wrangler config
+  // makes `wrangler deploy` skip framework auto-detection (which requires
+  // Vite >= 6 for the Cloudflare Vite plugin) and just upload `dist/`.
+  "name": "tenderbuddy",
+  "compatibility_date": "2026-10-15",
+  "assets": {
+    "directory": "./dist",
+    // Deep links such as /bandi/<id>: unmatched routes get index.html with 200.
+    "not_found_handling": "single-page-application"
+  }
+}

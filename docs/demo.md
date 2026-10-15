@@ -66,36 +66,52 @@ for dubious cases.
 
 Full detail and method in [`benchmark.md`](benchmark.md).
 
-## Remote demo — GitHub Pages + Cloudflare Tunnel
+## Remote demo — Cloudflare Worker (static assets) + Cloudflare Tunnel
 
-The frontend is deployed to GitHub Pages; the backend runs on the demo laptop and
-is published through a Cloudflare Tunnel. When the laptop (or the tunnel) is
-down, the deployed app drops to the bundled **offline example** so the link
-always shows something.
+```
+https://tenderbuddy.gandelli.dev        Cloudflare Worker (the SPA)   ← always up
+   │  cross-origin API calls
+   └─ https://api.tenderbuddy.gandelli.dev   Cloudflare Tunnel → laptop :8000
+                                                  │  laptop off → app shows the
+                                                  └─ offline example + "Simulate an upload"
+```
 
-**One-time setup**
+The frontend is a static SPA deployed as an **assets-only Cloudflare Worker**
+(Workers Builds, connected to this GitHub repo, so a push to `main` deploys it),
+always reachable at `tenderbuddy.gandelli.dev`. `frontend/wrangler.jsonc` points
+wrangler at `dist/` and sets `not_found_handling: single-page-application`, so
+deep links (`/bandi/:id`) get `index.html` with a 200 — no Vite plugin needed.
+The backend runs on the demo laptop and is published by a Cloudflare Tunnel at
+`api.tenderbuddy.gandelli.dev`. When the laptop is off, the app detects the
+unreachable API and serves the bundled **offline example**; the upload page then
+offers a **Simulate an upload** button that replays the whole pipeline on the
+example tender.
 
-1. Repo → Settings → Pages → **Source: GitHub Actions**.
-2. (Optional) Repo → Settings → Variables → Actions → `VITE_API_BASE`, if the
-   tunnel hostname ever changes (default is `https://tenderbuddy.gandelli.dev`).
-3. Cloudflare: point the tunnel hostname at the local backend
-   (`http://127.0.0.1:8000`).
+**One-time setup (Cloudflare dashboard)**
+
+1. Zero Trust → Networks → Tunnels → *the tunnel* → Public Hostnames: add
+   `api.tenderbuddy.gandelli.dev` → `http://127.0.0.1:8000`.
+2. Workers → Create → Connect to GitHub (`alessiogandelli/tenderbuddy`):
+   Root directory `frontend`, Build command `pnpm build`, Deploy command
+   `npx wrangler deploy`, env `VITE_API_BASE=https://api.tenderbuddy.gandelli.dev`
+   and `NODE_VERSION=20`.
+3. Workers → `tenderbuddy` → Custom domain: add `tenderbuddy.gandelli.dev`, then
+   remove the `tenderbuddy.gandelli.dev` public hostname from the tunnel.
 
 **Each demo run**
 
 ```bash
-# backend, with CORS open to the Pages origin
 cd backend
-BANDO_ALLOWED_ORIGINS=https://alessiogandelli.github.io \
-  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
-
-# tunnel (named tunnel already configured for tenderbuddy.gandelli.dev)
-cloudflared tunnel run <tunnel-name>
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000   # BANDO_ALLOWED_ORIGINS from .env
+cloudflared tunnel run --token <tunnel-token>                 # already running at the demo
 ```
 
-Push to `main` (or run the *Deploy frontend to GitHub Pages* workflow) to publish
-the frontend at <https://alessiogandelli.github.io/tenderbuddy/>. A push rebuilds
-with `VITE_BASE=/tenderbuddy/` and `VITE_API_BASE=<tunnel>` baked in.
+`backend/.env` must list the Worker origin so the browser is allowed to call the
+API across origins:
+
+```
+BANDO_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://tenderbuddy.gandelli.dev
+```
 
 **The offline example.** `frontend/public/demo/` holds a real processed tender
 (`bnd_eb09ac9d83ea`, 202 pages, 245 positions), the pricing dataset and the
@@ -109,4 +125,5 @@ python backend/scripts/export_demo_fixtures.py [bando_id]
 
 **Caveats.** Export (PDF/CSV) needs the live backend and is disabled offline.
 In offline mode, edits are kept in memory only (lost on reload).
+
 

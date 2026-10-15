@@ -273,6 +273,15 @@ export const demoApi = {
     return clone(currentBando());
   },
 
+  /** Replay the example without a file, keeping the tender's real name. */
+  simulateUpload: async (): Promise<Bando> => {
+    const loaded = await ensure();
+    bando = clone(loaded.bando);
+    bando.created_at = new Date().toISOString();
+    startReplay();
+    return clone(currentBando());
+  },
+
   runPipeline: async (_id: string, _deep = false): Promise<Bando> => {
     await ensure();
     startReplay();

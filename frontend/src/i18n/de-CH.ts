@@ -32,6 +32,10 @@ export const deCH: Messages = {
     uploading: "{name} wird hochgeladen…",
     notPdf: "Das ist kein PDF. Wählen Sie eine .pdf-Datei.",
     error: "Hochladen fehlgeschlagen. Läuft das Backend? Bitte erneut versuchen.",
+    simulate: "Upload simulieren",
+    simulateHint:
+      "Das Backend ist offline: hier läuft die mitgelieferte Beispiel-Ausschreibung durch die Pipeline.",
+    simulating: "Beispiel wird ausgeführt…",
     step: "Schritt {n}",
     how1: {
       title: "Wir lesen die Ausschreibung",

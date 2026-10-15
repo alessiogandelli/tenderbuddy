@@ -249,6 +249,8 @@ button:disabled { cursor: default; }
 .drop__title { font-size: 22px; font-weight: 800; }
 .drop__or { color: var(--muted); margin: 2px 0 8px; }
 .drop__hint { margin-top: 14px; color: var(--muted); font-size: 13px; }
+/* Offline: run the bundled example instead of uploading a file. */
+.drop__simulate { margin-top: 12px; }
 .drop .banner { margin-top: 16px; }
 .how { list-style: none; padding: 0; margin: 22px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .how__step {

@@ -34,6 +34,10 @@ export const en = {
     uploading: "Uploading {name}…",
     notPdf: "That is not a PDF. Choose a .pdf file.",
     error: "Upload failed. Is the backend running? Try again.",
+    simulate: "Simulate an upload",
+    simulateHint:
+      "The backend is offline: this runs the bundled example tender through the pipeline.",
+    simulating: "Running the example…",
     step: "Step {n}",
     how1: {
       title: "We read the tender",

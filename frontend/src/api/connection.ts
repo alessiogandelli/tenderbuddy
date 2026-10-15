@@ -35,9 +35,14 @@ async function runProbe(): Promise<ConnectionMode> {
     const timer = window.setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     const response = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
     window.clearTimeout(timer);
+    // Require the health payload, not just a 200: a static host's SPA fallback
+    // answers /api/health with index.html and 200, which is not a live backend.
     if (response.ok) {
-      setMode("live");
-      return "live";
+      const body = (await response.json().catch(() => null)) as { contract_version?: unknown } | null;
+      if (body && typeof body.contract_version === "string") {
+        setMode("live");
+        return "live";
+      }
     }
   } catch {
     /* unreachable: fall through to the example */

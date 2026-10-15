@@ -31,6 +31,10 @@ export const frCH: Messages = {
     uploading: "Téléversement de {name}…",
     notPdf: "Ce n'est pas un PDF. Choisissez un fichier .pdf.",
     error: "Le téléversement a échoué. Le backend tourne-t-il ? Réessayez.",
+    simulate: "Simuler un téléversement",
+    simulateHint:
+      "Le backend est hors ligne : ceci fait passer l'appel d'offres d'exemple fourni dans le pipeline.",
+    simulating: "Exécution de l'exemple…",
     step: "Étape {n}",
     how1: {
       title: "Nous lisons l'appel d'offres",

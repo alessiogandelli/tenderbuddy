@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSearch, ListChecks, Loader2, Scale, Upload } from "lucide-react";
+import { FileSearch, ListChecks, Loader2, Play, Scale, Upload } from "lucide-react";
 import { api } from "../api/client";
+import { useConnection } from "../api/connection";
 import { TenderLibrary } from "../components/TenderLibrary";
 import { useI18n } from "../i18n";
 
@@ -9,6 +10,7 @@ import { useI18n } from "../i18n";
 export function UploadPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const offline = useConnection() === "demo";
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -25,6 +27,19 @@ export function UploadPage() {
     try {
       const bando = await api.upload(file);
       // `fresh`: show the reading screen even if the run is already over.
+      navigate(`/bandi/${bando.id}`, { state: { fresh: true } });
+    } catch {
+      setError(t("upload.error"));
+      setUploading(null);
+    }
+  };
+
+  // Offline: run the bundled example through the pipeline, no PDF needed.
+  const simulate = async () => {
+    setUploading(t("upload.simulating"));
+    setError(null);
+    try {
+      const bando = await api.simulateUpload();
       navigate(`/bandi/${bando.id}`, { state: { fresh: true } });
     } catch {
       setError(t("upload.error"));
@@ -73,7 +88,16 @@ export function UploadPage() {
               >
                 {t("upload.choose")}
               </button>
-              <p className="drop__hint">{t("upload.hint")}</p>
+              {offline && (
+                <button
+                  type="button"
+                  className="btn btn--lg drop__simulate"
+                  onClick={() => void simulate()}
+                >
+                  <Play size={18} aria-hidden /> {t("upload.simulate")}
+                </button>
+              )}
+              <p className="drop__hint">{offline ? t("upload.simulateHint") : t("upload.hint")}</p>
             </>
           )}
           <input
